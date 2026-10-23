@@ -793,7 +793,12 @@ export function Operations({
           meta={meta}
           orders={orders}
           base={base}
-          onClose={() => setReport(null)}
+          onClose={() => {
+            const url = new URL(location.href);
+            url.searchParams.delete("ocorrencia");
+            history.replaceState(null, "", url);
+            setReport(null);
+          }}
           onChanged={changed}
           onOrder={setOrder}
         />

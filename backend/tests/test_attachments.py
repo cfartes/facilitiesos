@@ -148,7 +148,7 @@ def test_order_internal_images_and_original_report_stay_separate(foundation):
     assert uploaded.status_code == 201, uploaded.text
     assert act(client, data, work['id'], 'start').status_code == 200
     assert act(client, data, work['id'], 'resolve', solution='Dreno desobstruído pela equipe.', evidence='Teste de funcionamento sem novo vazamento.').status_code == 200
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     assert act(client, data, work['id'], 'close', note='Revisão presencial confirmou a solução apresentada.').status_code == 200
     assert client.get(path).json()['can_upload'] is False
     assert upload(client, path).status_code == 403
@@ -171,14 +171,14 @@ def test_cross_company_and_unit_access_auditor_and_limits(foundation, monkeypatc
     assert client.get(path).status_code == 200
     assert upload(client, path).status_code == 403
     assert client.request('DELETE', path + '/' + saved['id'], json={'note': 'Auditor não pode remover imagens.'}).status_code == 403
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     other_unit = location(client, data['tenant']['id'], 'Unidade Restrita')
     restricted = member(client, data['tenant']['id'], email='restricted-photo@example.com', roles=['manager'], all_units=False, unit_ids=[other_unit['id']])
     accept(client, restricted)
     login(client, 'restricted-photo@example.com')
     assert client.get(path).status_code == 404
     assert client.get(path + '/' + saved['id']).status_code == 404
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     # As cotas são consultadas no momento do registro, inclusive sobre imagens internas.
     monkeypatch.setattr(attachments, 'MAX_PER_RECORD', 1)
     assert upload(client, path, raw=photo('yellow')).status_code == 409

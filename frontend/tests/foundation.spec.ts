@@ -42,7 +42,7 @@ const invitation = {
 
 async function mockFoundation(
   page: Page,
-  scope: "superadmin" | "requester" = "superadmin",
+  scope: "superadmin" | "requester" | "company_admin" = "superadmin",
 ) {
   const members = [
     {
@@ -80,9 +80,9 @@ async function mockFoundation(
           name: "Pessoa de demonstração",
           role: scope === "superadmin" ? "superadmin" : "company_user",
           company_id: scope === "superadmin" ? null : companyId,
-          roles: scope === "superadmin" ? [] : ["requester"],
+          roles: scope === "superadmin" ? [] : [scope],
           unit_ids: [unitId],
-          all_units: scope === "superadmin",
+          all_units: scope !== "requester",
         },
       });
     if (path.endsWith("/foundation/companies"))
@@ -304,8 +304,8 @@ test("cadastro de empresa, validação e diálogo por teclado", async ({
 test("convite com escopo de unidade sem persistir o token", async ({
   page,
 }) => {
-  await mockFoundation(page);
-  await page.goto("/nexus/usuarios");
+  await mockFoundation(page, "company_admin");
+  await page.goto("/app/usuarios");
   await page
     .getByRole("button", { name: "Convidar usuário", exact: true })
     .click();
@@ -371,8 +371,13 @@ for (const width of [1440, 390]) {
   for (const path of ["empresas", "locais", "usuarios", "auditoria"]) {
     test(`WCAG e responsividade de ${path} em ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });
-      await mockFoundation(page);
-      await page.goto(`/nexus/${path}`);
+      await mockFoundation(
+        page,
+        ["locais", "usuarios"].includes(path) ? "company_admin" : "superadmin",
+      );
+      await page.goto(
+        `${["locais", "usuarios"].includes(path) ? "/app" : "/nexus"}/${path}`,
+      );
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.getByText("Carregando…", { exact: true })).toHaveCount(
         0,
@@ -395,8 +400,8 @@ for (const width of [1440, 390]) {
 }
 
 test("WCAG do diálogo de permissões e do primeiro acesso", async ({ page }) => {
-  await mockFoundation(page);
-  await page.goto("/nexus/usuarios");
+  await mockFoundation(page, "company_admin");
+  await page.goto("/app/usuarios");
   await page
     .getByRole("button", { name: "Convidar usuário", exact: true })
     .click();
@@ -448,16 +453,19 @@ test("fluxo completo com API real: empresa, unidades, convite, login e escopo", 
   await expect(
     page.getByRole("heading", { name: "Empresa Piloto E2E" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Sair da conta" }).click();
+  await page.goto("/");
   await page
-    .locator(".company-card")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Empresa Piloto E2E",
-        exact: true,
-      }),
-    })
-    .getByRole("link", { name: "Estrutura física", exact: true })
-    .click();
+    .getByLabel("E-mail", { exact: true })
+    .fill("ownerpilotoe2e@example.com");
+  await page
+    .getByLabel("Senha", { exact: true })
+    .fill("Admin-test-password-123!");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Sair da conta" }),
+  ).toBeVisible();
+  await page.goto("/app/locais");
   for (const name of ["Unidade Permitida E2E", "Unidade Restrita E2E"]) {
     await page.getByRole("button", { name: "Novo local" }).click();
     await page.getByLabel("Nome do local").fill(name);
@@ -467,8 +475,7 @@ test("fluxo completo com API real: empresa, unidades, convite, login e escopo", 
       page.getByRole("cell", { name: new RegExp(name) }).first(),
     ).toBeVisible();
   }
-  const pilotCompanyId = new URL(page.url()).searchParams.get("empresa");
-  await page.goto("/nexus/usuarios?empresa=" + pilotCompanyId);
+  await page.goto("/app/usuarios");
   await page
     .getByRole("button", { name: "Convidar usuário", exact: true })
     .click();

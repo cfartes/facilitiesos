@@ -27,7 +27,7 @@ def test_private_history_idempotency_and_linking(foundation):
     login(client, 'other@example.com')
     assert client.get(path).status_code == 404
     assert client.post(path, json=body).status_code == 404
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     assert client.post(path, json={'body': 'A equipe está avaliando o relato.', 'client_request_id': str(uuid4())}).status_code == 201
     current = client.get(data['base'] + '/occurrences').json()[0]
     assert current['first_response_at'] is not None
@@ -63,7 +63,7 @@ def test_history_scope_auditor_and_postgres_immutability(foundation):
     assert client.post(path, json={'body': 'Tentativa', 'client_request_id': str(uuid4())}).status_code == 403
     login(client, 'restricted@example.com')
     assert client.get(path).status_code == 404
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     other = company(client, 'Outra empresa', 'beta')
     assert client.get(path.replace(data['tenant']['id'], other['id'])).status_code == 404
     assert client.post(path, json={'body': 'Registro original', 'client_request_id': str(uuid4())}).status_code == 201

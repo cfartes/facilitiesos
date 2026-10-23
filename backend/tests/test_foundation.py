@@ -58,6 +58,7 @@ def login(client, email, password=PASSWORD):
     result = client.post('/api/v1/auth/login', json={'email': email, 'password': password})
     assert result.status_code == 200, result.text
     client.headers['X-CSRF-Token'] = client.cookies.get('facilities_csrf')
+    client.test_principal = result.json()
     return result.json()
 
 
@@ -76,18 +77,33 @@ def company_update(row, **changes):
 
 
 def company(client, name='Empresa Alpha', slug='alpha'):
+    previous = client.test_principal['email']
+    if previous != 'admin@example.com':
+        login(client, 'admin@example.com')
     result = client.post('/api/v1/foundation/companies', json=company_data(name, slug))
     assert result.status_code == 201, result.text
+    if not hasattr(client, 'test_owners'):
+        client.test_owners = {}
+    client.test_owners[result.json()['id']] = company_data(name, slug)['admin']['email']
+    if previous != 'admin@example.com':
+        login(client, previous)
     return result.json()
 
 
+def manage_company(client, company_id):
+    if client.test_principal.get('company_id') != company_id:
+        login(client, client.test_owners[company_id])
+
+
 def location(client, company_id, name='Unidade Matriz', kind='unit', parent=None):
+    manage_company(client, company_id)
     result = client.post(f'/api/v1/foundation/companies/{company_id}/locations', json={'name': name, 'kind': kind, 'parent_id': parent})
     assert result.status_code == 201, result.text
     return result.json()
 
 
 def member(client, company_id, email='member@example.com', roles=None, unit_ids=None, all_units=True):
+    manage_company(client, company_id)
     result = client.post(f'/api/v1/foundation/companies/{company_id}/users', json={
         'name': 'Pessoa Convidada', 'email': email, 'roles': roles or ['requester'],
         'all_units': all_units, 'unit_ids': unit_ids or [],
@@ -126,6 +142,7 @@ def test_hierarchy_and_cross_company_parent(foundation):
     assert room['timezone'] == 'America/Sao_Paulo'
     invalid = client.post(f"/api/v1/foundation/companies/{beta['id']}/locations", json={'name': 'Prédio Cruzado', 'kind': 'building', 'parent_id': unit['id']})
     assert invalid.status_code == 404
+    manage_company(client, alpha['id'])
     wrong_level = client.post(f"/api/v1/foundation/companies/{alpha['id']}/locations", json={'name': 'Sala Inválida', 'kind': 'environment', 'parent_id': unit['id']})
     assert wrong_level.status_code == 422
     update = client.put(f"/api/v1/foundation/companies/{alpha['id']}/locations/{unit['id']}", json={'name': unit['name'], 'criticality': 'medium', 'is_active': False, 'expected_version': 1})
@@ -226,7 +243,7 @@ def test_access_changes_invalidate_sessions(foundation):
     accept(client, invited)
     login(client, 'member@example.com')
     token = client.cookies.get('facilities_session')
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     result = client.put(f"/api/v1/foundation/companies/{row['id']}/users/{invited['user']['id']}", json={'name': 'Pessoa Atualizada', 'roles': ['auditor'], 'all_units': True, 'unit_ids': [], 'is_active': True, 'expected_version': 1})
     assert result.status_code == 200
     assert 'password_hash' not in result.json()
@@ -253,6 +270,7 @@ def test_units_and_roles_validation(foundation):
     other = company(client, 'Outra Empresa', 'outra')
     unit = location(client, other['id'])
     base = {'name': 'Pessoa', 'email': 'person@example.com', 'roles': ['requester'], 'all_units': False, 'unit_ids': [unit['id']]}
+    manage_company(client, row['id'])
     path = f"/api/v1/foundation/companies/{row['id']}/users"
     assert client.post(path, json=base).status_code == 422
     assert client.post(path, json=base | {'roles': ['superadmin']}).status_code == 422
@@ -338,6 +356,6 @@ def test_legacy_sqlite_upgrade_preserves_settings_and_audit(tmp_path):
         with engine.connect() as db:
             assert db.execute(text('SELECT email_from,version FROM configuration')).one() == ('existing@example.com', 7)
             assert db.execute(text('SELECT action,company_id FROM audit')).one() == ('integrations.updated', None)
-            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 8
+            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 9
     finally:
         engine.dispose()

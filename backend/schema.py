@@ -67,6 +67,10 @@ email_outbox = Table('email_outbox', metadata,
 Index('ix_email_outbox_due', email_outbox.c.status, email_outbox.c.next_attempt_at)
 Index('ix_email_outbox_user', email_outbox.c.company_id, email_outbox.c.user_id, email_outbox.c.created_at)
 Index('uq_users_company_id', users.c.company_id, users.c.id, unique=True)
+Table('company_whatsapp', metadata,
+    Column('company_id', String(36), ForeignKey('companies.id'), primary_key=True),
+    Column('session_id', String(36), unique=True), Column('status', String(30), nullable=False, server_default='not_connected'),
+    Column('lease', String(36)), Column('lease_until', Float, nullable=False, server_default='0'))
 from backend.operation_schema import register_tables, apply_operation_policies
 register_tables(metadata)
 
@@ -101,7 +105,7 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008'):
+        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)
@@ -110,7 +114,7 @@ def migrate_schema(engine):
 
 def apply_policies(connection):
     connection.execute(text('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
-    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations','email_outbox','password_resets')
+    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations','email_outbox','password_resets','company_whatsapp')
     tenant_tables = ('companies','users','locations','audit')
     connection.execute(text('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC'))
     connection.execute(text('GRANT USAGE ON SCHEMA public TO facilities_app,facilities_platform'))

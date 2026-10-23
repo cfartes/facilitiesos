@@ -329,4 +329,6 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     register_password_reset(app, storage, outbox, rate_limit, secure_cookie)
     from backend.operations import register_operations
     register_operations(app, storage, actor, rate_limit, cipher)
+    from backend.whatsapp import register_whatsapp
+    register_whatsapp(app, storage, actor, rate_limit, cipher)
     return app

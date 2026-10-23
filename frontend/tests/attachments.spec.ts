@@ -25,8 +25,8 @@ test("fotos com API real: envio, download, privacidade e remoção", async ({
   page,
 }) => {
   await login(page, "e2e-admin@example.com", "E2E-only-password-123!");
-  const cookies = await page.context().cookies();
-  const headers = {
+  let cookies = await page.context().cookies();
+  let headers = {
     Origin: "http://127.0.0.1:5190",
     "X-CSRF-Token": cookies.find((item) => item.name === "facilities_csrf")!
       .value,
@@ -59,6 +59,14 @@ test("fotos com API real: envio, download, privacidade e remoção", async ({
       password,
     },
   });
+  await page.getByRole("button", { name: "Sair da conta" }).click();
+  await login(page, "photos-owner-e2e@example.com", password);
+  cookies = await page.context().cookies();
+  headers = {
+    Origin: "http://127.0.0.1:5190",
+    "X-CSRF-Token": cookies.find((item) => item.name === "facilities_csrf")!
+      .value,
+  };
   const unit = await post(`/foundation/companies/${company.id}/locations`, {
     name: "Unidade Fotos",
     kind: "unit",
@@ -94,7 +102,7 @@ test("fotos com API real: envio, download, privacidade e remoção", async ({
     urgency: 2,
     assignee_id: null,
   });
-  await page.goto(`/nexus/ordens?empresa=${company.id}&ordem=${order.id}`);
+  await page.goto(`/app/ordens?empresa=${company.id}&ordem=${order.id}`);
   const dialog = page.getByRole("dialog");
   const section = dialog.getByRole("region", { name: "Fotos de evidência" });
   await expect(section.getByLabel("Selecionar foto")).toBeVisible();

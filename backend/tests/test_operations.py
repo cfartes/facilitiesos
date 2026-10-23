@@ -64,7 +64,7 @@ def test_complete_resolution_confirmation_and_closure(foundation):
     own = client.get(data['base'] + '/occurrences').json()[0]
     assert own['order_state'] == 'resolved'
     assert client.post(data['base'] + '/occurrences/' + own['id'] + '/confirmation', json={'outcome': 'confirmed', 'expected_version': own['version']}).status_code == 200
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     assert act(client, data, work['id'], 'close').status_code == 200
     history = detail(client, data, work['id'])
     assert history['order']['state'] == 'closed'
@@ -123,7 +123,7 @@ def test_contest_reopens_cycle_and_requires_new_confirmations(foundation):
     assert detail(client, data, work['id'])['order']['cycle'] == 2
     login(client, 'tech@example.com')
     assert act(client, data, work['id'], 'resolve', solution='Nova intervenção corrigiu a causa.', evidence='Novo teste realizado durante uma hora.').status_code == 200
-    login(client, 'admin@example.com')
+    login(client, 'owneralpha@example.com')
     reports = detail(client, data, work['id'])['occurrences']
     assert all(item['outcome'] == 'linked' for item in reports)
     assert act(client, data, work['id'], 'close').status_code == 422

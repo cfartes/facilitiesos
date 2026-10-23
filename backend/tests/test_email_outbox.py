@@ -8,20 +8,26 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from backend import providers
-from backend.tests.test_foundation import foundation, company, company_update, accept, login
+from backend.tests.test_foundation import foundation, company, company_update, accept, login, manage_company
 
 KEY = 'resend-unit-test-key-not-real'
 
 
 def configure(client, enabled=True, **changes):
+    previous = client.test_principal['email']
+    if previous != 'admin@example.com':
+        login(client, 'admin@example.com')
     current = client.get('/api/v1/nexus/integrations').json()
     response = client.put('/api/v1/nexus/integrations', json={'expected_version': current['version'], 'resend_api_key': KEY,
         'email_from': 'facilities@example.com', 'invitation_email_enabled': enabled} | changes)
     assert response.status_code == 200, response.text
+    if previous != 'admin@example.com':
+        login(client, previous)
     return response.json()
 
 
 def invite(client, company_id, email='queued@example.com', send=True):
+    manage_company(client, company_id)
     return client.post(f'/api/v1/foundation/companies/{company_id}/users', json={'name': 'Pessoa convidada', 'email': email,
         'roles': ['requester'], 'all_units': True, 'unit_ids': [], 'send_email': send})
 

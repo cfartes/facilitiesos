@@ -2,7 +2,7 @@
 
 **Atualização:** 23/10/2026 — horário de Brasília.
 
-**Referência do código analisado:** branch `feat/foundation`, migrações até `0008`.
+**Referência do código analisado:** branch `feat/foundation`, migrações até `0009`.
 
 **Repositório:** [cfartes/facilitiesos](https://github.com/cfartes/facilitiesos).
 
@@ -109,7 +109,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 - Acesso à própria empresa, com todas as unidades ou apenas unidades concedidas.
 - Revogação de sessões ao alterar acessos ou suspender a empresa.
 - Proteção contra remoção/desativação do último administrador ativo com acesso configurado.
-- Superadmin pode validar a operação em desenvolvimento; acesso operacional de suporte fora desse ambiente está bloqueado enquanto não houver fluxo de autorização da empresa.
+- Superadmin restrito a cadastro de empresas, integrações e auditoria, inclusive em desenvolvimento. Estrutura, usuários e operação são administrados pelo cliente. Eventual suporte operacional futuro requer perfil próprio e autorização da empresa.
 
 O perfil de aprovador não significa que aprovações financeiras estejam disponíveis. A configuração atual associa cada e-mail a uma conta e uma empresa; alternância entre empresas por uma mesma conta de cliente não está implementada.
 
@@ -173,7 +173,7 @@ Limites atuais de imagens: **200 MiB de conteúdo normalizado por empresa**, dez
 
 | Integração | Disponível hoje | Ainda não disponível |
 | --- | --- | --- |
-| OpenWA | Chave no Superadmin, armazenamento criptografado, substituição/remoção e consulta de sessões | Pareamento dentro do app, vínculo exclusivo por empresa, entrada de mensagens, abertura guiada de ocorrências e envio de atualizações |
+| OpenWA | Chave no Superadmin; administrador do cliente inicia sessão exclusiva por empresa, consulta status e QR Code temporário; bloqueio de acesso entre empresas e trava de concorrência | Homologação do pareamento real, entrada de mensagens, abertura guiada de ocorrências e envio de atualizações |
 | Resend | Chave, remetente, teste explícito, habilitação separada para convites/recuperação, fila transacional, retentativas limitadas e aviso de senha alterada; resultado do último convite por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
 | ViaCEP | Consulta de endereço pelo backend com preenchimento manual alternativo | Não é integração operacional de atendimento |
 
@@ -181,8 +181,8 @@ Chave cadastrada não comprova conexão ativa. Aceite de e-mail pelo provedor n�
 
 ### 5.8. Segurança e estrutura técnica
 
-- PostgreSQL local isolado, com migrações incrementais até `0008` e preservação dos dados existentes.
-- RLS/FORCE RLS nas 21 tabelas privadas; metadados de migração separados.
+- PostgreSQL local isolado, com migrações incrementais até `0009` e preservação dos dados existentes.
+- RLS/FORCE RLS nas 22 tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.
 - Escopo de empresa por transação e verificações adicionais por unidade, objeto e perfil na API.
 - Sessões e convites autenticados por hash; segredos de integração, conteúdo das fotos e corpo temporário de convites na fila criptografados. O corpo da fila é limpo quando o processamento termina ou é cancelado.
@@ -201,7 +201,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | --- | --- | --- |
 | 1 | Homologação real de convites Resend | Fluxo, fila, limites e consulta de falhas implementados; falta validar domínio, conta, remetente, origem acessível e recebimento real |
 | 1 | Homologação da recuperação de senha | Fluxo para contas das empresas implementado e testado; validar recebimento real, disponibilidade e procedimento de suporte. Recuperação Nexus continua administrativa |
-| 1 | WhatsApp via OpenWA | Homologar eventos recebidos, verificar identidade e empresa/unidade, vincular sessão, abrir relato guiado e enviar protocolo somente após persistência |
+| 1 | WhatsApp via OpenWA | Homologar pareamento e eventos recebidos, verificar identidade e empresa/unidade, abrir relato guiado e enviar protocolo somente após persistência |
 | 1 | Confiabilidade de mensagens | Distinguir enfileirado, aceito pelo provedor, entregue quando comprovado e falho; evitar duplicação e permitir reprocessamento autorizado |
 | 1 | Privacidade e páginas legais do Facilities | Adaptar termos, política, cookies e compartilhamentos; disponibilizar canal e acompanhamento dos pedidos de titulares com procedimentos definidos |
 | 1 | Suporte Nexus em produção | Acesso autorizado pela empresa, temporário, limitado e auditado; definir necessidade de outros perfis Nexus e MFA antes de liberar acesso externo |
@@ -339,7 +339,7 @@ Decisões operacionais ainda necessárias: cliente/unidade piloto, categorias in
 
 A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de e-mails de acesso](backend/email_outbox.py), [recuperação de senha](backend/password_reset.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
 
-As verificações registraram suíte de API em SQLite/PostgreSQL, build e 39 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, complementos privados, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
+As verificações registraram suíte de API em SQLite/PostgreSQL, build e 43 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, complementos privados, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
 
 O ambiente local de validação é [Nexus Facilities OS dev](http://127.0.0.1:5180/nexus/empresas), quando os serviços locais estiverem em execução. Não há implantação externa de produção documentada como concluída.
 

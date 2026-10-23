@@ -1,6 +1,5 @@
 """Operação do piloto: relatos, atendimento humano e comprovação textual."""
 import json
-import os
 import hashlib
 from typing import Literal
 from urllib.parse import quote
@@ -136,10 +135,10 @@ OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_nam
 def register_operations(app, storage, actor, rate_limit, cipher):
     def scope(user, company_id):
         company = str(company_id)
+        if user['role'] == 'superadmin':
+            raise HTTPException(403, 'A operação pertence aos usuários da empresa.')
         if user['role'] != 'superadmin' and (user['role'] != 'company_user' or user.get('company_id') != company):
             raise HTTPException(404, 'Empresa não encontrada.')
-        if user['role'] == 'superadmin' and os.getenv('FACILITIES_ENV', 'development') != 'development':
-            raise HTTPException(403, 'O acesso de suporte à operação precisa ser autorizado pela empresa.')
         with storage.connect() as db:
             row = db.execute('SELECT is_active FROM companies WHERE id=:id', {'id': company}).fetchone()
         if not row:

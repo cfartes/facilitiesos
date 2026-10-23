@@ -31,6 +31,7 @@ import { api } from "./api";
 import { Foundation, type FoundationPage } from "./Foundation";
 import { AcceptInvitation } from "./Invitation";
 import { PasswordRecovery } from "./PasswordRecovery";
+import { WhatsAppConnection } from "./WhatsAppConnection";
 import { Operations } from "./Operations";
 import type { OperationPage } from "./operationTypes";
 import type { User } from "./types";
@@ -379,7 +380,7 @@ function Integrations() {
           </p>
         </div>
         <span className="access-badge">
-          <ShieldCheck size={16} /> Superadmin completo
+          <ShieldCheck size={16} /> Gestão da plataforma
         </span>
       </div>
       <div className="privacy-banner">
@@ -512,9 +513,9 @@ function Integrations() {
                 <footer className="card-footer">
                   <Unplug size={16} />
                   <span>
-                    Cadastrar a chave não ativa o recebimento de ocorrências.
-                    Sessões por empresa e webhooks serão configurados na etapa
-                    de atendimento.
+                    Cadastrar a chave não ativa o recebimento de ocorrências. O
+                    administrador de cada empresa conecta o número pelo menu
+                    WhatsApp. O recebimento de ocorrências depende dos webhooks.
                   </span>
                 </footer>
               </section>
@@ -797,7 +798,7 @@ export function App() {
     );
   if (!user) return <Login onLogin={setUser} />;
   const isNexus = user.role === "superadmin";
-  const canManage = isNexus || user.roles?.includes("company_admin");
+  const canManage = !isNexus && user.roles?.includes("company_admin");
   const canAudit =
     isNexus ||
     user.roles?.some((role) =>
@@ -813,20 +814,23 @@ export function App() {
       notificacoes: "notifications",
     } as Partial<Record<string, OperationPage>>
   )[path.split("/").pop() ?? ""];
-  const page: FoundationPage | OperationPage | "integrations" =
+  const page: FoundationPage | OperationPage | "integrations" | "whatsapp" =
     operationPage ??
-    (path.endsWith("/empresas")
-      ? "companies"
-      : path.endsWith("/usuarios")
-        ? "users"
-        : path.endsWith("/locais")
-          ? "locations"
-          : path.endsWith("/auditoria")
-            ? "audit"
-            : isNexus
-              ? "integrations"
-              : "locations");
+    (path.endsWith("/whatsapp")
+      ? "whatsapp"
+      : path.endsWith("/empresas")
+        ? "companies"
+        : path.endsWith("/usuarios")
+          ? "users"
+          : path.endsWith("/locais")
+            ? "locations"
+            : path.endsWith("/auditoria")
+              ? "audit"
+              : isNexus
+                ? "integrations"
+                : "locations");
   const label = {
+    whatsapp: "WhatsApp",
     companies: "Empresas",
     users: "Usuários e permissões",
     locations: "Estrutura física",
@@ -840,6 +844,8 @@ export function App() {
   }[page];
   const base = isNexus ? "/nexus" : "/app";
   const allowed =
+    (!isNexus || ["companies", "integrations", "audit"].includes(page)) &&
+    (page !== "whatsapp" || canManage) &&
     (page !== "companies" || isNexus) &&
     (page !== "users" || canManage) &&
     (page !== "audit" || canAudit) &&
@@ -920,7 +926,17 @@ export function App() {
           },
         ]
       : []),
-  ];
+  ].filter(
+    (item) =>
+      !isNexus || ["companies", "integrations", "audit"].includes(item.key),
+  );
+  if (canManage)
+    navItems.push({
+      key: "whatsapp",
+      title: "WhatsApp",
+      href: "/app/whatsapp",
+      icon: MessageCircle,
+    });
   return (
     <div className="app-layout">
       <a href="#main" className="skip-link">
@@ -963,7 +979,7 @@ export function App() {
               Acesso autorizado
               <br />
               <strong>
-                {isNexus ? "Superadmin completo" : "Escopo da empresa"}
+                {isNexus ? "Gestão da plataforma" : "Escopo da empresa"}
               </strong>
             </span>
           </div>
@@ -1000,6 +1016,8 @@ export function App() {
             <Notice error>Seu perfil não permite acessar esta página.</Notice>
           ) : page === "integrations" ? (
             <Integrations />
+          ) : page === "whatsapp" ? (
+            <WhatsAppConnection />
           ) : operationPage ? (
             <Operations page={operationPage} user={user} />
           ) : (

@@ -95,9 +95,9 @@ async function mockOperations(page: Page, requester = false) {
           id: person.id,
           name: person.name,
           email: "demo@example.com",
-          role: requester ? "company_user" : "superadmin",
-          company_id: requester ? company.id : null,
-          roles: requester ? ["requester"] : [],
+          role: "company_user",
+          company_id: company.id,
+          roles: requester ? ["requester"] : ["company_admin"],
           all_units: true,
           unit_ids: [],
         },
@@ -196,7 +196,7 @@ for (const width of [1440, 390]) {
       }
       return route.fallback();
     });
-    await page.goto("/nexus/ocorrencias?ocorrencia=report-demo");
+    await page.goto("/app/ocorrencias?ocorrencia=report-demo");
     const dialog = page.getByRole("dialog");
     await dialog
       .getByLabel("Adicionar complemento privado")
@@ -238,7 +238,7 @@ for (const width of [1440, 390]) {
       ["ativos", "Ativos", "Novo ativo"],
       ["ocorrencias", "Ocorrências", "Nova ocorrência"],
     ]) {
-      await page.goto("/nexus/" + path);
+      await page.goto("/app/" + path);
       await expect(
         page.getByRole("heading", { name: title, exact: true }),
       ).toBeVisible();
@@ -255,7 +255,7 @@ for (const width of [1440, 390]) {
         page.getByRole("button", { name: button, exact: true }),
       ).toBeFocused();
     }
-    await page.goto("/nexus/ordens");
+    await page.goto("/app/ordens");
     await page.getByRole("button", { name: "Visualizar quadro" }).click();
     await expect(
       page.getByText(initialOrder.title, { exact: true }),
@@ -273,7 +273,7 @@ test("execução e resolução preservam modal e enviam versão e evidência", a
   page,
 }) => {
   const writes = await mockOperations(page);
-  await page.goto("/nexus/ordens?ordem=order-demo");
+  await page.goto("/app/ordens?ordem=order-demo");
   const dialog = page.getByRole("dialog");
   await expect(
     dialog.getByRole("heading", { name: initialOrder.title }),

@@ -7,7 +7,8 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0008` e RLS/FORCE RLS nas 21 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0009` e RLS/FORCE RLS nas 22 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- Superadmin restrito a empresas, integrações e auditoria, com bloqueio operacional também na API. Administrador do cliente gerencia estrutura, usuários e operação; dispõe do menu WhatsApp para iniciar a sessão exclusiva da empresa e ler o QR Code temporário.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
@@ -31,13 +32,13 @@ O convite pode ser compartilhado manualmente ou enfileirado para Resend, após h
 
 Estados implementados: em triagem, atribuída, em execução, aguardando, resolvida e concluída; cancelamento e reabertura auditados. Conclusão automática permanece desabilitada no piloto. Uma contestação retoma a execução e abre novo ciclo; a próxima resolução exige novas confirmações. Atribuição preserva a primeira resposta registrada. Espera ainda não calcula nem pausa SLA. Solicitações críticas não devem depender exclusivamente do WhatsApp.
 
-O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
+O Superadmin não acessa a operação em nenhum ambiente. Eventual suporte futuro exige perfil próprio e autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximo incremento: checklist operacional e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
+Próximo incremento: checklist operacional e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e à verificação de identidade dos solicitantes. O vínculo de sessão por empresa e a tela de QR Code estão implementados, com pareamento real a homologar. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
 
-Utilizar OpenWA após vincular sessões exclusivas por empresa, verificar a identidade do solicitante e homologar os eventos recebidos. O guia disponibilizado cobre envio e consulta, sem contrato de webhooks. Consultar o módulo correspondente do RotaFY como referência, sem presumir compatibilidade nem reutilizar suas credenciais.
+O administrador do cliente conecta pelo menu WhatsApp; a sessão usa nome exclusivo `facilities-{empresa}` e vínculo privado persistido. A API Key permanece global no Superadmin. O fluxo utiliza os endpoints de criação/inicialização/status/QR encontrados no RotaFY, sem copiar suas credenciais, e ainda exige pareamento real para homologação. QR não é persistido nem auditado; leituras são autenticadas e sem cache. Antes de receber ocorrências, verificar identidade do solicitante e homologar os eventos recebidos. O guia disponibilizado cobre envio e consulta, sem contrato de webhooks.
 
 Fluxo guiado proposto: identificar solicitante, coletar unidade/local, descrição e foto opcional, confirmar resumo, persistir a ocorrência e só então informar o protocolo. Reenvios não podem criar relatos duplicados. Conexão, fila, falhas e reprocessamentos devem ser observáveis. IA não é necessária para esse fluxo.
 

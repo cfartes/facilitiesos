@@ -911,13 +911,6 @@ export function Foundation({
                           <h2>{company.name}</h2>
                           <p className="muted">{company.slug}</p>
                           <div className="company-card-actions">
-                            <a
-                              className="button secondary"
-                              href={`/nexus/locais?empresa=${company.id}`}
-                            >
-                              <FolderTree size={16} />
-                              Estrutura física
-                            </a>
                             <button
                               className="icon-button"
                               aria-label={`Editar ${company.name}`}

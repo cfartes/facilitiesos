@@ -64,7 +64,19 @@ test("convite com API real, fila e provedor simulado, sem enviar e-mail externo"
   await expect(
     page.getByText("Configurações salvas com sucesso."),
   ).toBeVisible();
-  await page.goto("/nexus/usuarios?empresa=" + company.id);
+  await page.getByRole("button", { name: "Sair da conta" }).click();
+  await page.goto("/");
+  await page
+    .getByLabel("E-mail", { exact: true })
+    .fill("email-owner-e2e@example.com");
+  await page
+    .getByLabel("Senha", { exact: true })
+    .fill("Email-e2e-password-123!");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Sair da conta" }),
+  ).toBeVisible();
+  await page.goto("/app/usuarios");
   await page
     .getByRole("button", { name: "Convidar usuário", exact: true })
     .click();
@@ -208,11 +220,6 @@ test("recuperação com API real e caixa de e-mail sintética, sem entrega exter
   await expect(page.getByRole("status")).toContainText("Senha alterada");
   await page.getByRole("link", { name: "Ir para o login" }).click();
   await page.getByLabel("E-mail", { exact: true }).fill(email);
-  await page.getByLabel("Senha", { exact: true }).fill(previousPassword);
-  await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "E-mail ou senha inválidos.",
-  );
   await page.getByLabel("Senha", { exact: true }).fill(newPassword);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(

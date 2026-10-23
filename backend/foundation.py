@@ -113,8 +113,10 @@ def user_public(row):
 
 
 def register_foundation(app, storage, actor, superadmin, rate_limit, origin, superadmin_email, outbox):
-    def company_scope(user, company_id, manage=False, locations=False):
+    def company_scope(user, company_id, manage=False, locations=False, platform=False):
         company = str(company_id)
+        if user['role'] == 'superadmin' and not platform:
+            raise HTTPException(403, 'A administração operacional pertence ao administrador da empresa.')
         if user['role'] != 'superadmin':
             if user.get('company_id') != company:
                 raise HTTPException(404, 'Empresa não encontrada.')
@@ -207,7 +209,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
 
     @app.put('/api/v1/foundation/companies/{company_id}')
     def update_company(company_id: UUID, data: CompanyUpdate, user=Depends(superadmin)):
-        company = company_scope(user, company_id)
+        company = company_scope(user, company_id, platform=True)
         with storage.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             previous = db.execute('SELECT slug FROM companies WHERE id=:id', {'id': company}).fetchone()
@@ -397,7 +399,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
 
     @app.get('/api/v1/foundation/companies/{company_id}/audit')
     def list_audit(company_id: UUID, user=Depends(actor)):
-        company = company_scope(user, company_id)
+        company = company_scope(user, company_id, platform=True)
         if user['role'] != 'superadmin' and not set(user['roles']).intersection({'company_admin','auditor','manager'}):
             raise HTTPException(403, 'Seu perfil não permite consultar a auditoria.')
         with storage.scoped(user, company) as db:
