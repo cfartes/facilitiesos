@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "./api";
+import { CompanyForm } from "./CompanyForm";
 import { errorMessage, Loading, Modal, Notice } from "./ui";
 import type { Company, Invitation, Location, Member, User } from "./types";
 
@@ -52,6 +53,7 @@ const roles: Record<string, string> = {
 };
 const actions: Record<string, string> = {
   "company.created": "Empresa cadastrada",
+  "user.initial_admin_created": "Administrador inicial cadastrado",
   "company.updated": "Empresa atualizada",
   "company.suspended": "Empresa suspensa",
   "location.created": "Local cadastrado",
@@ -82,114 +84,6 @@ function Empty({ title, text }: { title: string; text: string }) {
       <h2>{title}</h2>
       <p>{text}</p>
     </div>
-  );
-}
-
-function CompanyForm({
-  company,
-  onClose,
-  onSaved,
-}: {
-  company: Company | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(company?.name ?? "");
-  const [slug, setSlug] = useState(company?.slug ?? "");
-  const [active, setActive] = useState(company?.is_active ?? true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      await api(
-        `/foundation/companies${company ? "/" + company.id : ""}`,
-        company ? "PUT" : "POST",
-        company
-          ? { name, is_active: active, expected_version: company.version }
-          : { name, slug },
-      );
-      onSaved();
-      onClose();
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Modal
-      title={company ? "Editar empresa" : "Nova empresa"}
-      onClose={onClose}
-      busy={busy}
-    >
-      <form onSubmit={submit}>
-        <fieldset className="plain-fieldset" disabled={busy}>
-          <div className="field">
-            <label htmlFor="company-name">Nome da empresa</label>
-            <input
-              autoFocus
-              id="company-name"
-              minLength={2}
-              maxLength={160}
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="company-slug">Identificador</label>
-            <input
-              id="company-slug"
-              minLength={3}
-              maxLength={60}
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              placeholder="empresa-exemplo"
-              required
-              value={slug}
-              disabled={!!company}
-              onChange={(e) => setSlug(e.target.value)}
-            />
-            <small>
-              Use letras minúsculas, números e hífens. O identificador é
-              permanente.
-            </small>
-          </div>
-          {company && (
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-              />{" "}
-              Empresa ativa
-            </label>
-          )}
-          {company && !active && (
-            <p className="form-help">
-              Suspender a empresa encerra as sessões de seus usuários e bloqueia
-              novos acessos, preservando os registros.
-            </p>
-          )}
-          {error && <Notice error>{error}</Notice>}
-          <div className="modal-actions">
-            <button
-              type="button"
-              className="button secondary"
-              onClick={onClose}
-            >
-              Cancelar
-            </button>
-            <button className="button primary" disabled={busy}>
-              {busy && <LoaderCircle size={16} className="spin" />}Salvar
-              empresa
-            </button>
-          </div>
-        </fieldset>
-      </form>
-    </Modal>
   );
 }
 

@@ -5,10 +5,11 @@ Fundação do Nexus Facilities OS, seguindo a identidade visual do Nexus RotaFY.
 ## Recursos disponíveis
 
 - Superadmin: cadastrar/editar/suspender empresas, organizar locais, convidar usuários, configurar permissões, consultar auditoria e administrar integrações.
+- Cadastro de empresa equivalente ao RotaFY, sem plano: nome comercial, razão social, identificador de acesso, CPF/CNPJ com validação de dígitos, telefone/WhatsApp, CEP, endereço, número, complemento opcional, bairro, cidade, UF, perfil operacional e administrador inicial com nome, e-mail e senha. Perfis operacionais do Facilities: escritórios, indústria, logística e uso misto. A senha inicial exige 12 caracteres, maiúscula e símbolo. Empresa e administrador são criados na mesma transação. A consulta ViaCEP ocorre pelo backend e permite preenchimento manual em caso de falha, sem sobrescrever alterações feitas durante a consulta.
 - Empresa: acesso individual conforme perfil e unidades concedidas. Administradores gerenciam a própria equipe; supervisores organizam locais nas unidades autorizadas; os demais perfis consultam a estrutura dentro do escopo concedido. Auditoria disponível a administradores, gestores e auditores no seu escopo.
 - Estrutura: unidade → prédio → andar → ambiente, com criticidade e fuso horário herdado da unidade. Não permite referências entre empresas nem inativação de um local com filhos ativos. Alterar hierarquia e exclusão definitiva não fazem parte desta etapa.
 - Convite: link individual válido por 48 horas, de uso único, com token persistido somente por hash. O usuário define sua própria senha (mínimo 12 caracteres). O link é entregue ao administrador para compartilhamento; **não há envio automático de convites por e-mail nesta etapa**. Reemitir um convite invalida o anterior.
-- Alterações de acesso encerram as sessões do usuário. Suspensão da empresa bloqueia login e acesso aos seus registros, preservando o histórico. O último administrador ativo com convite aceito não pode ser removido ou desativado.
+- Alterações de acesso encerram as sessões do usuário. Suspensão da empresa bloqueia login e acesso aos seus registros, preservando o histórico. O último administrador ativo com acesso configurado não pode ser removido ou desativado.
 - Perfis acumuláveis: solicitante, técnico, supervisor, gestor, aprovador, auditor e administrador da empresa. Os fluxos operacionais de cada perfil serão habilitados nas próximas entregas. Fornecedores aguardam cadastro e vínculo organizacional próprios.
 
 ## Executar no Windows
@@ -39,11 +40,11 @@ npm run dev
 
 Acesse **http://127.0.0.1:5180/nexus/empresas**. Use esse endereço, incluindo `127.0.0.1`, pois a API valida a origem. Para outra origem, ajuste `FACILITIES_ORIGIN` e a configuração de proxy/CSP. A conta Superadmin pode acessar `/nexus/configuracoes/integracoes`; usuários das empresas entram pelo mesmo formulário e recebem navegação adequada ao perfil.
 
-Prepare a primeira empresa, sua estrutura e um convite para seu administrador. O administrador pode então convidar a equipe e restringir os acessos às unidades necessárias. Cada e-mail corresponde a uma conta e uma empresa nesta etapa; não há alternância entre empresas na mesma conta de cliente.
+Cadastre a primeira empresa e seu administrador inicial, depois prepare a estrutura física. O administrador já pode entrar com o e-mail e a senha inicial informados; ele pode então convidar a equipe e restringir os acessos às unidades necessárias. Cada e-mail corresponde a uma conta e uma empresa nesta etapa; não há alternância entre empresas na mesma conta de cliente.
 
 ### Banco e migrações
 
-`python -m backend.dev_database` preserva o volume e as credenciais existentes. As migrações `0001` e `0002` são incrementais e podem ser reaplicadas, sem excluir dados. Para um PostgreSQL externo, configure `FACILITIES_MIGRATION_DATABASE_URL`, `FACILITIES_DATABASE_URL` e `FACILITIES_PLATFORM_DATABASE_URL`; provisione os papéis seguindo `infra/init-db.sh` e execute `python -m backend.migrate` com a credencial proprietária.
+`python -m backend.dev_database` preserva o volume e as credenciais existentes. As migrações `0001` a `0003` são incrementais e podem ser reaplicadas, sem excluir dados. A `0003` acrescenta os campos cadastrais da empresa; dados que não existiam ficam em branco, sem inventar documentos, contatos ou endereços. Ao editar um cadastro anterior, complete os campos obrigatórios. Identificadores anteriores com hífen podem ser mantidos; novos identificadores e alterações usam de 2 a 50 letras minúsculas/números. Para um PostgreSQL externo, configure `FACILITIES_MIGRATION_DATABASE_URL`, `FACILITIES_DATABASE_URL` e `FACILITIES_PLATFORM_DATABASE_URL`; provisione os papéis seguindo `infra/init-db.sh` e execute `python -m backend.migrate` com a credencial proprietária.
 
 As tabelas de configuração, autenticação, convites e limites são restritas ao papel da plataforma. Empresas, usuários, locais e auditoria têm RLS/FORCE RLS, com escopo de empresa por transação e restrições adicionais de unidade para locais e auditoria. Credenciais de conta ficam em tabela separada da listagem de usuários. A tabela `schema_versions` contém somente os identificadores de migração, sem dados privados.
 
@@ -75,6 +76,6 @@ npm run test:e2e
 
 Os testes de API verificam SQLite e, quando `.env.database` está disponível, PostgreSQL real em bancos aleatórios temporários `facilities_test_*`, criados e removidos pelo próprio teste. Não apagam dados do banco `facilities`. Incluem isolamento de empresas/unidades, RLS sem escopo, conexões reutilizadas, convites, suspensão, CSRF e proteção das credenciais. Sem PostgreSQL configurado, os respectivos cenários são marcados como ignorados.
 
-O Playwright inicia uma API temporária em `127.0.0.1:8010` e o frontend em `127.0.0.1:5180`; essas portas devem estar livres. A conta `e2e-admin@example.com` existe **somente no processo de testes** e usa banco temporário. Um cenário percorre o fluxo completo com a API real; os demais simulam respostas para verificar erros, navegação, teclado e acessibilidade em desktop/mobile. Nenhuma mensagem real é enviada. Para instalar o navegador: `npx playwright install chromium`.
+O Playwright inicia uma API temporária em `127.0.0.1:8011` e o frontend em `127.0.0.1:5190`; essas portas devem estar livres e são distintas das portas do dev. A conta `e2e-admin@example.com` existe **somente no processo de testes** e usa banco temporário. Um cenário percorre o fluxo completo com a API real; os demais simulam respostas para verificar erros, navegação, teclado e acessibilidade em desktop/mobile. ViaCEP e envio de mensagens não são acionados durante os testes. Para instalar o navegador: `npx playwright install chromium`.
 
 O build mantém CSP restrita à própria origem. Somente o servidor de desenvolvimento remove a meta CSP para permitir os scripts e estilos do HMR.

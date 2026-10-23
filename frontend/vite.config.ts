@@ -17,5 +17,9 @@ export default defineConfig({
     },
   ],
   server: { proxy: { "/api": "http://127.0.0.1:8010" } },
-  preview: { proxy: { "/api": "http://127.0.0.1:8010" } },
+  preview: {
+    proxy: {
+      "/api": `http://127.0.0.1:${process.env.FACILITIES_API_PORT ?? "8010"}`,
+    },
+  },
 });

@@ -429,3 +429,41 @@ td code {
     scroll-behavior: auto;
   }
 }
+.modal.wide {
+  width: min(860px, calc(100% - 32px));
+}
+.company-section {
+  border: 0;
+  border-top: 1px solid #e5edf1;
+  padding: 20px 0 0;
+  margin: 23px 0 0;
+  min-width: 0;
+}
+.company-section legend {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 10px 0 0;
+  color: #18324a;
+}
+.company-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 20px;
+}
+.company-section .secret-input input {
+  padding-left: 13px;
+}
+.company-data-notice {
+  font-size: 11px;
+  line-height: 1.8;
+  padding: 11px 14px;
+  background: #edf7f5;
+  color: #315c55;
+  border: 1px solid #cfe6e0;
+  border-radius: 8px;
+}
+@media (max-width: 600px) {
+  .company-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

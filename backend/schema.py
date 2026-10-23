@@ -20,7 +20,11 @@ rate_limits = Table('rate_limits', metadata,
 companies = Table('companies', metadata,
     Column('id', String(36), primary_key=True), Column('name', String(160), nullable=False),
     Column('slug', String(60), unique=True, nullable=False), Column('is_active', Integer, nullable=False, server_default='1'),
-    Column('version', Integer, nullable=False, server_default='1'), Column('created_at', Text, nullable=False))
+    Column('version', Integer, nullable=False, server_default='1'), Column('created_at', Text, nullable=False),
+    Column('corporate_name', String(150)), Column('cnpj', String(14)), Column('contact_phone', String(20)),
+    Column('address', String(250)), Column('address_number', String(30)), Column('address_complement', String(150)),
+    Column('neighborhood', String(100)), Column('city', String(100)), Column('state', String(2)),
+    Column('postal_code', String(8)), Column('operational_profile', String(20)))
 locations = Table('locations', metadata,
     Column('id', String(36), primary_key=True), Column('company_id', String(36), ForeignKey('companies.id'), nullable=False),
     Column('unit_id', String(36), nullable=False), Column('parent_id', String(36)),
@@ -52,7 +56,15 @@ def migrate_schema(engine):
             if name not in columns:
                 connection.execute(text(f'ALTER TABLE audit ADD COLUMN {name} VARCHAR(36)'))
         connection.execute(text('INSERT INTO configuration(id) VALUES(1) ON CONFLICT(id) DO NOTHING'))
-        for version in ('0001', '0002'):
+        company_columns = {item['name'] for item in inspect(connection).get_columns('companies')}
+        # Campos novos são anuláveis para preservar cadastros anteriores incompletos.
+        from backend.company_details import DETAIL_FIELDS
+        for name in DETAIL_FIELDS:
+            if name not in company_columns:
+                datatype = companies.c[name].type.compile(dialect=connection.dialect)
+                connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
+        connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
+        for version in ('0001', '0002', '0003'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)

@@ -15,6 +15,18 @@ export type Company = {
   is_active: boolean;
   version: number;
   created_at: string;
+  trade_name?: string;
+  corporate_name?: string | null;
+  cnpj?: string | null;
+  contact_phone?: string | null;
+  address?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  operational_profile?: string | null;
 };
 export type Location = {
   id: string;

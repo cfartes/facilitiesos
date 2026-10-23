@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_va
 from sqlalchemy.exc import IntegrityError
 
 from backend.security import digest, password_hash
+from backend.company_details import CompanyCreate, CompanyUpdate, DETAIL_FIELDS, company_public
+from backend import providers
 
 Role = Literal['requester', 'technician', 'supervisor', 'manager', 'approver', 'auditor', 'company_admin']
 Kind = Literal['unit', 'building', 'floor', 'environment']
@@ -21,17 +23,6 @@ Criticality = Literal['low', 'medium', 'high', 'critical']
 
 class Input(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-
-
-class CompanyCreate(Input):
-    name: str = Field(min_length=2, max_length=160)
-    slug: str = Field(min_length=3, max_length=60, pattern=r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
-
-
-class CompanyUpdate(Input):
-    name: str = Field(min_length=2, max_length=160)
-    is_active: bool = Field(strict=True)
-    expected_version: int = Field(ge=1, strict=True)
 
 
 class LocationCreate(Input):
@@ -160,33 +151,71 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
                 rows = db.execute('SELECT * FROM companies WHERE id=:id', {'id': user['company_id']}).fetchall()
         else:
             raise HTTPException(403, 'Acesso não autorizado.')
-        return [dict(row) | {'is_active': bool(row['is_active'])} for row in rows]
+        details = user['role'] == 'superadmin' or 'company_admin' in user.get('roles', [])
+        return [company_public(row, details=details) for row in rows]
+
+    @app.get('/api/v1/foundation/postal-code/{postal_code}')
+    def postal_lookup(postal_code: str, user=Depends(superadmin)):
+        if not re.fullmatch(r'[0-9]{8}', postal_code):
+            raise HTTPException(422, 'Informe um CEP com oito dígitos.')
+        rate_limit('postal:' + digest(user['email']), 30, 60)
+        result = providers.request_provider('https://viacep.com.br/ws/' + postal_code + '/json/', {})
+        if not isinstance(result, dict) or result.get('erro'):
+            raise HTTPException(404, 'CEP não encontrado. Preencha o endereço manualmente.')
+        mapping = {'address': ('logradouro', 250), 'neighborhood': ('bairro', 100), 'city': ('localidade', 100), 'state': ('uf', 2)}
+        if not all(isinstance(result.get(source), str) for source, size in mapping.values()):
+            raise HTTPException(502, 'Não foi possível consultar o CEP. Preencha o endereço manualmente.')
+        return {field: result[source][:size] for field, (source, size) in mapping.items()}
 
     @app.post('/api/v1/foundation/companies', status_code=201)
     def create_company(data: CompanyCreate, user=Depends(superadmin)):
         rate_limit('company-create:' + digest(user['email']), 30, 60)
-        values = {'id': str(uuid4()), 'name': data.name, 'slug': data.slug, 'created': now()}
+        admin_email = str(data.admin.email).lower()
+        if admin_email == superadmin_email.lower():
+            raise HTTPException(409, 'O e-mail do administrador não está disponível para cadastro.')
+        values = {'id': str(uuid4()), 'name': data.trade_name, 'slug': data.slug, 'created': now(),
+                  **{field: getattr(data, field) for field in DETAIL_FIELDS}}
+        admin_id = str(uuid4())
+        hashed = password_hash(data.admin.password.get_secret_value())
         try:
             with storage.connect() as db:
-                db.execute('INSERT INTO companies(id,name,slug,created_at) VALUES(:id,:name,:slug,:created)', values)
+                db.execute('BEGIN IMMEDIATE')
+                fields = ','.join(DETAIL_FIELDS)
+                params = ','.join(':' + field for field in DETAIL_FIELDS)
+                db.execute(f'INSERT INTO companies(id,name,slug,created_at,{fields}) VALUES(:id,:name,:slug,:created,{params})', values)
+                db.execute('''INSERT INTO users(id,company_id,name,email,roles_json,unit_ids_json,all_units,created_at)
+                    VALUES(:id,:company,:name,:email,:roles,:units,1,:created)''', {
+                    'id': admin_id, 'company': values['id'], 'name': data.admin.full_name,
+                    'email': admin_email, 'roles': json.dumps(['company_admin']), 'units': '[]', 'created': values['created'],
+                })
+                db.execute('INSERT INTO auth_accounts(user_id,password_hash) VALUES(:id,:password)', {'id': admin_id, 'password': hashed})
                 record_audit(db, user, 'company.created', values['id'], values['id'])
-                return dict(db.execute('SELECT * FROM companies WHERE id=:id', {'id': values['id']}).fetchone())
+                record_audit(db, user, 'user.initial_admin_created', values['id'], admin_id)
+                return company_public(db.execute('SELECT * FROM companies WHERE id=:id', {'id': values['id']}).fetchone()) | {'admin_email': admin_email}
         except IntegrityError:
-            raise HTTPException(409, 'Identificador de empresa já utilizado.') from None
+            raise HTTPException(409, 'Identificador da empresa ou e-mail do administrador já utilizado.') from None
 
     @app.put('/api/v1/foundation/companies/{company_id}')
     def update_company(company_id: UUID, data: CompanyUpdate, user=Depends(superadmin)):
         company = company_scope(user, company_id)
         with storage.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            result = db.execute('UPDATE companies SET name=:name,is_active=:active,version=version+1 WHERE id=:id AND version=:version',
-                                {'name': data.name, 'active': int(data.is_active), 'id': company, 'version': data.expected_version})
+            previous = db.execute('SELECT slug FROM companies WHERE id=:id', {'id': company}).fetchone()
+            if data.slug != previous['slug'] and not re.fullmatch(r'[a-z0-9]{2,50}', data.slug):
+                raise HTTPException(422, 'O novo identificador deve ter de 2 a 50 letras minúsculas e números, sem símbolos.')
+            fields = ','.join(field + '=:' + field for field in DETAIL_FIELDS)
+            try:
+                result = db.execute(f'UPDATE companies SET name=:name,slug=:slug,{fields},is_active=:active,version=version+1 WHERE id=:id AND version=:version',
+                                    {'name': data.trade_name, 'slug': data.slug, 'active': int(data.is_active), 'id': company, 'version': data.expected_version,
+                                     **{field: getattr(data, field) for field in DETAIL_FIELDS}})
+            except IntegrityError:
+                raise HTTPException(409, 'Identificador de empresa já utilizado.') from None
             if result.rowcount != 1:
                 raise HTTPException(409, 'A empresa foi alterada. Recarregue antes de salvar.')
             if not data.is_active:
                 db.execute('DELETE FROM sessions WHERE email IN (SELECT email FROM users WHERE company_id=:id)', {'id': company})
             record_audit(db, user, 'company.updated' if data.is_active else 'company.suspended', company, company)
-            return dict(db.execute('SELECT * FROM companies WHERE id=:id', {'id': company}).fetchone())
+            return company_public(db.execute('SELECT * FROM companies WHERE id=:id', {'id': company}).fetchone())
 
     @app.get('/api/v1/foundation/companies/{company_id}/locations')
     def list_locations(company_id: UUID, user=Depends(actor)):
@@ -296,7 +325,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
             if removing_admin:
                 peers = db.execute('SELECT u.roles_json FROM users u JOIN auth_accounts a ON a.user_id=u.id WHERE u.company_id=:company AND u.id<>:id AND u.is_active=1 AND a.password_hash IS NOT NULL', {'company': company, 'id': row['id']}).fetchall()
                 if not any('company_admin' in json.loads(peer['roles_json']) for peer in peers):
-                    raise HTTPException(409, 'Mantenha pelo menos um administrador ativo com convite aceito.')
+                    raise HTTPException(409, 'Mantenha pelo menos um administrador ativo com acesso configurado.')
             result = db.execute('''UPDATE users SET name=:name,roles_json=:roles,unit_ids_json=:units,all_units=:all_units,is_active=:active,version=version+1
                 WHERE company_id=:company AND id=:id AND version=:version''', {
                 'name': data.name, 'roles': json.dumps(data.roles), 'units': json.dumps([str(unit) for unit in data.unit_ids]),

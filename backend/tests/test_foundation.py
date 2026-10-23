@@ -61,8 +61,22 @@ def login(client, email, password=PASSWORD):
     return result.json()
 
 
+def company_data(name='Empresa Alpha', slug='alpha'):
+    return {'trade_name': name, 'corporate_name': name + ' LTDA', 'slug': slug,
+            'cnpj': '11.222.333/0001-81', 'contact_phone': '(11) 99999-9999',
+            'address': 'Rua de Testes', 'address_number': '100', 'address_complement': '',
+            'neighborhood': 'Centro', 'city': 'São Paulo', 'state': 'SP', 'postal_code': '01001-000',
+            'operational_profile': 'office', 'admin': {'full_name': 'Administrador Inicial',
+            'email': 'owner' + slug.replace('-', '') + '@example.com', 'password': PASSWORD}}
+
+
+def company_update(row, **changes):
+    fields = ('trade_name','corporate_name','slug','cnpj','contact_phone','address','address_number','address_complement','neighborhood','city','state','postal_code','operational_profile')
+    return {field: row[field] for field in fields} | {'is_active': bool(row['is_active']), 'expected_version': row['version']} | changes
+
+
 def company(client, name='Empresa Alpha', slug='alpha'):
-    result = client.post('/api/v1/foundation/companies', json={'name': name, 'slug': slug})
+    result = client.post('/api/v1/foundation/companies', json=company_data(name, slug))
     assert result.status_code == 201, result.text
     return result.json()
 
@@ -92,10 +106,10 @@ def accept(client, invited):
 def test_company_lifecycle_and_version_conflict(foundation):
     client, _ = foundation
     row = company(client)
-    duplicate = client.post('/api/v1/foundation/companies', json={'name': 'Duplicada', 'slug': 'alpha'})
+    duplicate = client.post('/api/v1/foundation/companies', json=company_data('Duplicada', 'alpha'))
     assert duplicate.status_code == 409
     path = f"/api/v1/foundation/companies/{row['id']}"
-    payload = {'name': 'Empresa Atualizada', 'is_active': False, 'expected_version': 1}
+    payload = company_update(row, trade_name='Empresa Atualizada', is_active=False)
     assert client.put(path, json=payload).status_code == 200
     assert client.put(path, json=payload).status_code == 409
     assert client.get('/api/v1/foundation/companies').json()[0]['is_active'] is False
@@ -134,7 +148,7 @@ def test_invitation_single_use_and_login(foundation):
     assert principal['roles'] == ['requester']
     assert 'password_hash' not in principal
     assert client.get('/api/v1/nexus/integrations').status_code == 403
-    assert client.post('/api/v1/foundation/companies', json={'name': 'Intrusa', 'slug': 'intrusa'}).status_code == 403
+    assert client.post('/api/v1/foundation/companies', json=company_data('Intrusa', 'intrusa')).status_code == 403
 
 
 def test_unit_and_tenant_isolation(foundation):
@@ -161,6 +175,8 @@ def test_company_admin_can_manage_only_own_company(foundation):
     alpha, beta = company(client), company(client, 'Empresa Beta', 'beta')
     invited = member(client, alpha['id'], roles=['company_admin'])
     accept(client, invited)
+    initial = next(item for item in client.get(f"/api/v1/foundation/companies/{alpha['id']}/users").json() if item['email'] == 'owneralpha@example.com')
+    assert client.put(f"/api/v1/foundation/companies/{alpha['id']}/users/{initial['id']}", json={'name': initial['name'], 'roles': ['requester'], 'all_units': True, 'unit_ids': [], 'is_active': False, 'expected_version': 1}).status_code == 200
     login(client, 'member@example.com')
     assert client.get(f"/api/v1/foundation/companies/{alpha['id']}/users").status_code == 200
     assert client.get(f"/api/v1/foundation/companies/{beta['id']}/users").status_code == 404
@@ -179,7 +195,7 @@ def test_suspension_revokes_access_and_preserves_data(foundation):
     login(client, 'member@example.com')
     token = client.cookies.get('facilities_session')
     login(client, 'admin@example.com')
-    result = client.put(f"/api/v1/foundation/companies/{row['id']}", json={'name': row['name'], 'is_active': False, 'expected_version': 1})
+    result = client.put(f"/api/v1/foundation/companies/{row['id']}", json=company_update(row, is_active=False))
     assert result.status_code == 200
     client.cookies.set('facilities_session', token)
     assert client.get('/api/v1/auth/me').status_code == 401
@@ -322,6 +338,6 @@ def test_legacy_sqlite_upgrade_preserves_settings_and_audit(tmp_path):
         with engine.connect() as db:
             assert db.execute(text('SELECT email_from,version FROM configuration')).one() == ('existing@example.com', 7)
             assert db.execute(text('SELECT action,company_id FROM audit')).one() == ('integrations.updated', None)
-            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 2
+            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 3
     finally:
         engine.dispose()

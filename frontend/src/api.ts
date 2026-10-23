@@ -11,6 +11,7 @@ export async function api<T>(
   path: string,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const csrf =
     document.cookie
@@ -18,6 +19,7 @@ export async function api<T>(
       .find((c) => c.startsWith("facilities_csrf="))
       ?.split("=")[1] ?? "";
   const response = await fetch(`/api/v1${path}`, {
+    signal,
     method,
     credentials: "same-origin",
     headers: {

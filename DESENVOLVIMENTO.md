@@ -7,6 +7,7 @@ Atualizado em 23/10/2026. Referências: PDF funcional v1.0, diretrizes de segura
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
 - PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais e RLS/FORCE RLS nas nove tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
+- Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
 - Navegação e autorização de clientes; revogação de sessões ao alterar acesso ou suspender empresa.
 - Auditoria por empresa e unidade, com consulta dos últimos cem eventos autorizados.
