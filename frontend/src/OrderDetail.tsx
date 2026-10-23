@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { LoaderCircle, MessageSquare, ShieldCheck } from "lucide-react";
 import { api } from "./api";
+import { Attachments } from "./Attachments";
 import { errorMessage, Loading, Modal, Notice } from "./ui";
 import {
   actionNames,
@@ -425,6 +426,13 @@ export function OrderDetail({
                 </form>
               )}
           </section>
+          <Attachments
+            base={base + "/orders/" + id}
+            revision={order.version}
+            onChanged={() => {
+              void load();
+            }}
+          />
           <section className="order-section">
             <h3>Linha do tempo</h3>
             <ol className="order-timeline">

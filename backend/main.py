@@ -105,6 +105,9 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
             else:
                 # Interrompe a leitura ao atingir o limite, inclusive sem Content-Length.
                 limit = 65536 if request.url.path.startswith('/api/v1/operations/') else 24000
+                if request.method == 'POST' and request.url.path.startswith('/api/v1/operations/') and request.url.path.endswith('/attachments'):
+                    from backend.attachments import MAX_BYTES
+                    limit = MAX_BYTES
                 body = b''
                 async for chunk in request.stream():
                     body += chunk
@@ -292,5 +295,5 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     from backend.foundation import register_foundation
     register_foundation(app, storage, actor, superadmin, rate_limit, allowed_origin, email)
     from backend.operations import register_operations
-    register_operations(app, storage, actor, rate_limit)
+    register_operations(app, storage, actor, rate_limit, cipher)
     return app

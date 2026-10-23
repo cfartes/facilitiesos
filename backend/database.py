@@ -55,7 +55,7 @@ class Database:
                     row = connection.execute(text('SELECT rolname,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user')).mappings().one()
                     if row['rolname'] != expected or any(row[key] for key in ('rolsuper', 'rolbypassrls', 'rolcreatedb', 'rolcreaterole')):
                         raise RuntimeError('Papel de runtime inválido: use facilities_app/platform sem privilégios administrativos ou BYPASSRLS.')
-                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004')")).scalar_one() != 4:
+                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004','0005')")).scalar_one() != 5:
                         raise RuntimeError('Execute python -m backend.migrate antes de iniciar a API.')
                     from backend.operation_schema import OP_TABLES
                     tables = ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations') + OP_TABLES

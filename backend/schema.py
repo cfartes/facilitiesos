@@ -56,7 +56,7 @@ def migrate_schema(engine):
             connection.execute(text('SELECT pg_advisory_xact_lock(741000)'))
         # Índices das tabelas anteriores devem existir antes das novas FKs compostas.
         existing = set(inspect(connection).get_table_names())
-        for table in (locations, users):
+        for table in (locations, users, metadata.tables['occurrences']):
             if table.name in existing:
                 for index in table.indexes:
                     index.create(connection, checkfirst=True)
@@ -74,7 +74,7 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004'):
+        for version in ('0001', '0002', '0003', '0004', '0005'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)

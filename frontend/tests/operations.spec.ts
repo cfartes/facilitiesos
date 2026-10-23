@@ -141,6 +141,10 @@ async function mockOperations(page: Page, requester = false) {
         },
       });
     if (path.endsWith("/orders")) return route.fulfill({ json: [order] });
+    if (path.endsWith("/attachments"))
+      return route.fulfill({
+        json: { items: [], can_upload: true, can_internal: !requester },
+      });
     if (path.endsWith("/occurrences") || path.endsWith("/notifications"))
       return route.fulfill({ json: [] });
     return route.fulfill({ status: 404, json: {} });

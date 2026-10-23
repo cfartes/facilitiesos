@@ -447,7 +447,13 @@ test("fluxo completo com API real: empresa, unidades, convite, login e escopo", 
     page.getByRole("heading", { name: "Empresa Piloto E2E" }),
   ).toBeVisible();
   await page
-    .getByRole("main")
+    .locator(".company-card")
+    .filter({
+      has: page.getByRole("heading", {
+        name: "Empresa Piloto E2E",
+        exact: true,
+      }),
+    })
     .getByRole("link", { name: "Estrutura física", exact: true })
     .click();
   for (const name of ["Unidade Permitida E2E", "Unidade Restrita E2E"]) {

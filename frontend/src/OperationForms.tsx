@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api";
+import { Attachments } from "./Attachments";
 import { errorMessage, Modal, Notice } from "./ui";
 import type {
   Asset,
@@ -292,7 +293,8 @@ export function OccurrenceForm({
     <Modal title="Nova ocorrência" onClose={onClose} busy={busy} wide>
       <p className="form-help">
         Informe o problema e o local. A equipe fará a triagem e direcionará o
-        atendimento. Evite dados pessoais sensíveis nos campos livres.
+        atendimento. Evite dados pessoais sensíveis nos campos livres. Depois de
+        registrar, abra a ocorrência para adicionar fotos de evidência.
       </p>
       <Form
         onSubmit={submit}
@@ -509,6 +511,11 @@ export function OccurrenceDetail({
   return (
     <Modal title={report.code} onClose={onClose} busy={busy} wide>
       <h3 className="detail-title">{report.title}</h3>
+      <p className="form-help">
+        As fotos deste relato são privadas ao solicitante e à equipe com acesso
+        à triagem. Para compartilhar uma imagem com os participantes de uma
+        ordem, anexe-a na própria ordem.
+      </p>
       <div className="detail-facts">
         <span>{report.location_name}</span>
         <span>{report.category_name}</span>
@@ -546,6 +553,9 @@ export function OccurrenceDetail({
             Abrir ordem de serviço
           </button>
         </div>
+      )}
+      {mode === "view" && (
+        <Attachments base={base + "/occurrences/" + report.id} />
       )}
       {mode === "view" ? (
         <div className="detail-buttons">

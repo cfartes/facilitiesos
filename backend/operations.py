@@ -1,9 +1,13 @@
 """Operação do piloto: relatos, atendimento humano e comprovação textual."""
 import json
 import os
+import hashlib
+from typing import Literal
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
-from fastapi import Depends, HTTPException
+from cryptography.fernet import InvalidToken
+from fastapi import Body, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 
@@ -124,7 +128,7 @@ OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_nam
  LEFT JOIN work_orders w ON w.id=o.order_id AND w.company_id=o.company_id'''
 
 
-def register_operations(app, storage, actor, rate_limit):
+def register_operations(app, storage, actor, rate_limit, cipher):
     def scope(user, company_id):
         company = str(company_id)
         if user['role'] != 'superadmin' and (user['role'] != 'company_user' or user.get('company_id') != company):
@@ -238,6 +242,131 @@ def register_operations(app, storage, actor, rate_limit):
         })
         event(db, user, order, 'occurrence.linked', 'Relato vinculado ao atendimento.')
         notify(db, user, order['company_id'], order['unit_id'], 'Ocorrência vinculada a uma ordem de serviço.', order['id'], occurrence['id'], occurrence['requester_id'])
+
+    from backend import attachments
+
+    def attachment_context(db, user, company, resource, parent_id):
+        row = (get_order if resource == 'orders' else get_occurrence)(db, user, company, parent_id)
+        state = row['state'] if resource == 'orders' else row['order_state']
+        can_write = (user['role'] == 'superadmin' or bool(set(user.get('roles', [])) - {'auditor'})) and state not in ('closed', 'cancelled')
+        return row, resource == 'orders' and internal(user, row), can_write
+
+    def attachment_query(resource):
+        return 'order_id' if resource == 'orders' else 'occurrence_id'
+
+    def attachment_public(row, user, can_write):
+        return {key: row[key] for key in ('id', 'filename', 'content_type', 'byte_size', 'visibility', 'uploader_name', 'created_at')} | {
+            'can_remove': can_write and (coordinates(user) or (user.get('id') is not None and row['uploader_id'] == user['id'])),
+        }
+
+    attachment_fields = 'id,filename,content_type,byte_size,visibility,uploader_id,uploader_name,created_at'
+    attachment_path = '/api/v1/operations/companies/{company_id}/{resource}/{parent_id}/attachments'
+
+    @app.get(attachment_path)
+    def list_attachments(company_id: UUID, resource: Literal['orders', 'occurrences'], parent_id: UUID, user=Depends(actor)):
+        company = scope(user, company_id)
+        with storage.scoped(user, company) as db:
+            _, private, can_write = attachment_context(db, user, company, resource, parent_id)
+            rows = db.execute(f'SELECT {attachment_fields} FROM attachments WHERE company_id=:company AND {attachment_query(resource)}=:parent' + ('' if private else " AND visibility='shared'") + ' ORDER BY created_at,id', {
+                'company': company, 'parent': str(parent_id),
+            }).fetchall()
+            return {'items': [attachment_public(row, user, can_write) for row in rows], 'can_upload': can_write, 'can_internal': private}
+
+    @app.post(attachment_path, status_code=201)
+    def upload_attachment(company_id: UUID, resource: Literal['orders', 'occurrences'], parent_id: UUID,
+                          body: bytes = Body(media_type='application/octet-stream'), visibility: Literal['shared', 'internal'] = 'shared',
+                          filename: str = Header(default='', alias='X-File-Name', max_length=1500),
+                          content_type: str = Header(default='', alias='Content-Type'), user=Depends(actor)):
+        company = scope(user, company_id); write(user)
+        rate_limit('attachment-upload:' + digest(user['email']), 10, 60)
+        # Autorizar antes de decodificar fotos ou consultar a cota privilegiada.
+        with storage.scoped(user, company) as db:
+            _, private, can_write = attachment_context(db, user, company, resource, parent_id)
+            if not can_write:
+                raise HTTPException(403, 'Seu perfil ou a situação do atendimento não permite adicionar arquivos.')
+            if visibility == 'internal' and not private:
+                raise HTTPException(403, 'Seu acesso não permite anexos internos neste atendimento.')
+        name, image, fingerprint = attachments.normalize_image(body, filename, content_type)
+        with storage.scoped(user, company) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row, private, can_write = attachment_context(db, user, company, resource, parent_id)
+            if not can_write or (visibility == 'internal' and not private):
+                raise HTTPException(409, 'O atendimento mudou. Recarregue antes de anexar a imagem.')
+            column = attachment_query(resource)
+            params = {'company': company, 'parent': str(parent_id), 'visibility': visibility, 'hash': fingerprint}
+            duplicate = db.execute(f'SELECT {attachment_fields} FROM attachments WHERE company_id=:company AND {column}=:parent AND visibility=:visibility AND sha256=:hash', params).fetchone()
+            if duplicate:
+                return attachment_public(duplicate, user, can_write)
+            # Contagens não dependem da visibilidade do solicitante, para evitar contornar os limites.
+            with storage.connect() as platform:
+                count = platform.execute(f'SELECT count(*) AS total FROM attachments WHERE company_id=:company AND {column}=:parent', params).fetchone()['total']
+                used = platform.execute('SELECT COALESCE(sum(byte_size),0) AS total FROM attachments WHERE company_id=:company', {'company': company}).fetchone()['total']
+            if count >= attachments.MAX_PER_RECORD:
+                raise HTTPException(409, 'Este registro atingiu o limite de dez imagens.')
+            if used + len(image) > attachments.MAX_COMPANY_BYTES:
+                raise HTTPException(409, 'A empresa atingiu a cota de imagens do piloto. Procure o administrador.')
+            identifier = str(uuid4())
+            payload = {'id': identifier, 'company': company, 'unit': row['unit_id'], 'order': str(parent_id) if resource == 'orders' else None,
+                       'occurrence': str(parent_id) if resource == 'occurrences' else None, 'uploader': user.get('id'),
+                       'actor': user.get('name', 'Administração Nexus'), 'filename': name, 'type': content_type,
+                       'size': len(image), 'hash': fingerprint, 'cipher': cipher.encrypt(image).decode(), 'visibility': visibility, 'time': now()}
+            db.execute('''INSERT INTO attachments(id,company_id,unit_id,order_id,occurrence_id,uploader_id,uploader_name,filename,content_type,byte_size,sha256,ciphertext,visibility,created_at)
+                VALUES(:id,:company,:unit,:order,:occurrence,:uploader,:actor,:filename,:type,:size,:hash,:cipher,:visibility,:time)''', payload)
+            record_audit(db, user, 'attachment.added', company, identifier, row['unit_id'])
+            if resource == 'orders':
+                event(db, user, row, 'attachment.added', 'Imagem adicionada ao atendimento.', visibility)
+            notify(db, user, company, row['unit_id'], 'Nova imagem no atendimento.',
+                   order_id=str(parent_id) if resource == 'orders' else None, occurrence_id=str(parent_id) if resource == 'occurrences' else None,
+                   requester=row.get('requester_id'), private=visibility == 'internal')
+            saved = db.execute(f'SELECT {attachment_fields} FROM attachments WHERE id=:id AND company_id=:company', {'id': identifier, 'company': company}).fetchone()
+            return attachment_public(saved, user, can_write)
+
+    def find_attachment(db, user, company, resource, parent_id, identifier):
+        parent, private, can_write = attachment_context(db, user, company, resource, parent_id)
+        row = db.execute(f'SELECT {attachment_fields} FROM attachments WHERE company_id=:company AND {attachment_query(resource)}=:parent AND id=:id' + ('' if private else " AND visibility='shared'"), {
+            'company': company, 'parent': str(parent_id), 'id': str(identifier),
+        }).fetchone()
+        if not row:
+            raise HTTPException(404, 'Imagem não encontrada no seu acesso.')
+        return parent, row, can_write
+
+    @app.get(attachment_path + '/{attachment_id}')
+    def download_attachment(company_id: UUID, resource: Literal['orders', 'occurrences'], parent_id: UUID, attachment_id: UUID, user=Depends(actor)):
+        company = scope(user, company_id)
+        rate_limit('attachment-download:' + digest(user['email']), 60, 60)
+        with storage.scoped(user, company) as db:
+            parent, row, _ = find_attachment(db, user, company, resource, parent_id, attachment_id)
+            stored = db.execute('SELECT ciphertext,sha256 FROM attachments WHERE company_id=:company AND id=:id', {'company': company, 'id': str(attachment_id)}).fetchone()
+            try:
+                image = cipher.decrypt(stored['ciphertext'].encode())
+            except (InvalidToken, ValueError):
+                raise HTTPException(503, 'Não foi possível abrir a imagem. Procure o administrador.') from None
+            if hashlib.sha256(image).hexdigest() != stored['sha256']:
+                raise HTTPException(503, 'Não foi possível verificar a integridade da imagem.')
+            record_audit(db, user, 'attachment.downloaded', company, str(attachment_id), parent['unit_id'])
+            return Response(image, media_type=row['content_type'], headers={
+                'Content-Disposition': "attachment; filename*=UTF-8''" + quote(row['filename'], safe=''), 'Cache-Control': 'private, no-store',
+            })
+
+    class RemoveAttachment(Input):
+        note: str = Field(default='', max_length=1000)
+
+    @app.delete(attachment_path + '/{attachment_id}', status_code=204)
+    def remove_attachment(company_id: UUID, resource: Literal['orders', 'occurrences'], parent_id: UUID, attachment_id: UUID,
+                          data: RemoveAttachment, user=Depends(actor)):
+        company = scope(user, company_id); write(user)
+        with storage.scoped(user, company) as db:
+            db.execute('BEGIN IMMEDIATE')
+            parent, row, can_write = find_attachment(db, user, company, resource, parent_id, attachment_id)
+            if not attachment_public(row, user, can_write)['can_remove']:
+                raise HTTPException(403, 'Somente o autor ou a coordenação podem remover imagens de um atendimento aberto.')
+            if resource == 'orders' and len(data.note) < 10:
+                raise HTTPException(422, 'Informe o motivo da remoção com pelo menos dez caracteres.')
+            db.execute('DELETE FROM attachments WHERE company_id=:company AND id=:id', {'company': company, 'id': str(attachment_id)})
+            record_audit(db, user, 'attachment.removed', company, str(attachment_id), parent['unit_id'])
+            if resource == 'orders':
+                event(db, user, parent, 'attachment.removed', data.note, row['visibility'])
+            return Response(status_code=204)
 
     @app.get('/api/v1/operations/companies/{company_id}/metadata')
     def metadata(company_id: UUID, user=Depends(actor)):

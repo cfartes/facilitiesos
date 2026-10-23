@@ -25,3 +25,4 @@ psycopg==3.3.6
 psycopg-binary==3.3.6
 tzdata==2026.5
 phonenumbers==9.0.40
+Pillow==13.0.0

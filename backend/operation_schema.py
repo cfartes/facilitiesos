@@ -1,8 +1,8 @@
 """Estrutura do atendimento, com referências compostas por empresa e unidade."""
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, String, Table, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, Table, Text, UniqueConstraint
 
 OP_TABLES = ('service_categories', 'assets', 'occurrences', 'work_orders', 'order_participants',
-             'order_messages', 'order_events', 'notifications')
+             'order_messages', 'order_events', 'notifications', 'attachments')
 
 
 def register_tables(metadata):
@@ -73,6 +73,19 @@ def register_tables(metadata):
           Column('order_id', String(36)), Column('occurrence_id', String(36)), Column('title', String(180), nullable=False),
           Column('created_at', Text, nullable=False), Column('read_at', Text), company_fk(), unit_fk(),
           ForeignKeyConstraint(['company_id','user_id'], ['users.company_id','users.id']), order_fk())
+    occurrences = metadata.tables['occurrences']
+    Index('uq_occurrences_company_unit_id', occurrences.c.company_id, occurrences.c.unit_id, occurrences.c.id, unique=True)
+    # shortcut: imagens no banco com cota de piloto; migrar para objetos privados antes de ampliar a escala.
+    Table('attachments', metadata, *identity(), unit(), Column('order_id', String(36)), Column('occurrence_id', String(36)),
+          Column('uploader_id', String(36)), Column('uploader_name', String(160), nullable=False),
+          Column('filename', String(120), nullable=False), Column('content_type', String(30), nullable=False),
+          Column('byte_size', Integer, nullable=False), Column('sha256', String(64), nullable=False),
+          Column('ciphertext', Text, nullable=False), Column('visibility', String(20), nullable=False), Column('created_at', Text, nullable=False),
+          CheckConstraint('(order_id IS NULL) <> (occurrence_id IS NULL)'),
+          CheckConstraint("visibility IN ('shared','internal') AND (occurrence_id IS NULL OR visibility='shared')"),
+          CheckConstraint('byte_size > 0 AND byte_size <= 5242880'), company_fk(), unit_fk(), order_fk(),
+          ForeignKeyConstraint(['company_id','unit_id','occurrence_id'], ['occurrences.company_id','occurrences.unit_id','occurrences.id']),
+          ForeignKeyConstraint(['company_id','uploader_id'], ['users.company_id','users.id']))
 
 
 def apply_operation_policies(connection):
@@ -95,6 +108,10 @@ def apply_operation_policies(connection):
         'order_messages': f"{unit_scope} AND {view_order} AND (visibility='shared' OR {internal})",
         'order_events': f"{unit_scope} AND {view_order} AND (visibility='shared' OR {internal})",
         'notifications': f'{unit_scope} AND user_id={uid}',
+        'attachments': f"""{unit_scope} AND (
+            (occurrence_id IS NOT NULL AND EXISTS(SELECT 1 FROM occurrences o WHERE o.id=attachments.occurrence_id AND o.company_id=attachments.company_id AND ({manage} OR {review} OR o.requester_id={uid})))
+            OR (order_id IS NOT NULL AND EXISTS(SELECT 1 FROM work_orders w WHERE w.id=attachments.order_id AND w.company_id=attachments.company_id)
+                AND (visibility='shared' OR {manage} OR {review} OR EXISTS(SELECT 1 FROM work_orders w WHERE w.id=attachments.order_id AND w.company_id=attachments.company_id AND w.assignee_id={uid}))))""",
     }
     for table, condition in conditions.items():
         if table in ('order_messages', 'order_events'):
@@ -108,8 +125,16 @@ def apply_operation_policies(connection):
         connection.execute(text(f'DROP POLICY IF EXISTS tenant_scope ON {table}'))
         connection.execute(text(f'CREATE POLICY tenant_scope ON {table} TO facilities_app USING({condition}) WITH CHECK({condition})'))
         connection.execute(text(f'GRANT INSERT ON {table} TO facilities_app'))
-        if table not in ('order_messages','order_events','order_participants'):
+        if table not in ('order_messages','order_events','order_participants','attachments'):
             connection.execute(text(f'GRANT UPDATE ON {table} TO facilities_app'))
     # Permite entregar avisos a outros participantes, mantendo a leitura individual.
     connection.execute(text('DROP POLICY IF EXISTS notification_delivery ON notifications'))
     connection.execute(text(f'CREATE POLICY notification_delivery ON notifications FOR INSERT TO facilities_app WITH CHECK({unit_scope})'))
+    connection.execute(text('GRANT DELETE ON attachments TO facilities_app,facilities_platform'))
+    connection.execute(text('REVOKE UPDATE ON attachments FROM facilities_app,facilities_platform'))
+    connection.execute(text('DROP POLICY IF EXISTS attachment_removal ON attachments'))
+    connection.execute(text(f'''CREATE POLICY attachment_removal ON attachments AS RESTRICTIVE FOR DELETE TO facilities_app
+        USING (({manage} OR uploader_id={uid}) AND (
+            (order_id IS NOT NULL AND EXISTS(SELECT 1 FROM work_orders w WHERE w.id=attachments.order_id AND w.company_id=attachments.company_id AND w.state NOT IN ('closed','cancelled')))
+            OR (occurrence_id IS NOT NULL AND EXISTS(SELECT 1 FROM occurrences o WHERE o.id=attachments.occurrence_id AND o.company_id=attachments.company_id AND
+                (o.order_id IS NULL OR EXISTS(SELECT 1 FROM work_orders w WHERE w.id=o.order_id AND w.company_id=o.company_id AND w.state NOT IN ('closed','cancelled')))))))'''))

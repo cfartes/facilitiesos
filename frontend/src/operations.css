@@ -370,6 +370,55 @@
   font-size: 12px;
   margin-bottom: 16px;
 }
+.attachment-list {
+  padding: 0;
+  list-style: none;
+}
+.attachment-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dce5eb;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+}
+.attachment-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.attachment-info strong {
+  font-size: 12px;
+}
+.attachment-info small {
+  display: block;
+  color: #52697b;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 5px 0;
+}
+.attachment-section input[type="file"] {
+  height: auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+}
+.attachment-section input::file-selector-button {
+  border: 1px solid #cbd9e0;
+  border-radius: 5px;
+  background: #f1f7f6;
+  color: #163b43;
+  padding: 6px 9px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+.attachment-removal {
+  border-left: 3px solid #ad4716;
+  padding: 12px;
+  margin: 12px 0;
+  background: #fff8f1;
+}
 @media (max-width: 1000px) {
   .operation-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -380,6 +429,10 @@
   }
 }
 @media (max-width: 600px) {
+  .attachment-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .operation-summary {
     gap: 10px;
   }

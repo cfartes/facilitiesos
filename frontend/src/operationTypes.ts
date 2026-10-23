@@ -154,6 +154,9 @@ export const assetStates: Record<string, string> = {
   retired: "Desativado",
 };
 export const actionNames: Record<string, string> = {
+  "attachment.added": "Imagem adicionada",
+  "attachment.removed": "Imagem removida",
+  "attachment.downloaded": "Imagem consultada",
   "order.created": "Ordem criada",
   "occurrence.linked": "Relato vinculado",
   "order.assigned": "Responsável atualizado",
