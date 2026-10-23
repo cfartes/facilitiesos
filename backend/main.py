@@ -42,6 +42,7 @@ class Configuration(Input):
     clear_openwa_key: bool = False
     clear_resend_key: bool = False
     invitation_email_enabled: bool | None = Field(default=None, strict=True)
+    password_reset_enabled: bool | None = Field(default=None, strict=True)
 
     @model_validator(mode='after')
     def check_keys(self):
@@ -202,6 +203,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         return {'version': row['version'], 'openwa_base_url': providers.OPENWA_BASE,
                 'openwa_key_configured': bool(row['openwa_key']), 'resend_key_configured': bool(row['resend_key']),
                 'invitation_email_enabled': bool(row['invitation_email_enabled']),
+                'password_reset_enabled': bool(row['password_reset_enabled']),
                 'email_from': row['email_from'], 'updated_at': row['updated_at']}
 
     def decrypt(value):
@@ -265,6 +267,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         with connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = dict(db.execute('SELECT * FROM configuration WHERE id=1').fetchone())
+            reset_was_enabled = bool(row['password_reset_enabled'])
             if data.expected_version != row['version']:
                 raise HTTPException(409, 'Outra alteração foi salva. Recarregue as configurações antes de continuar.')
             for field, secret, clear in [('openwa_key', data.openwa_api_key, data.clear_openwa_key), ('resend_key', data.resend_api_key, data.clear_resend_key)]:
@@ -285,9 +288,18 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
                 row['invitation_email_enabled'] = 0
             if row['invitation_email_enabled'] and not row['email_from']:
                 raise HTTPException(422, 'Configure chave e remetente antes de habilitar convites por e-mail.')
+            if data.password_reset_enabled is not None:
+                row['password_reset_enabled'] = int(data.password_reset_enabled)
+            if data.password_reset_enabled and not (row['resend_key'] and row['email_from']):
+                raise HTTPException(422, 'Configure chave e remetente antes de habilitar recuperação de senha.')
+            if not row['resend_key']:
+                row['password_reset_enabled'] = 0
+            if reset_was_enabled and not row['password_reset_enabled']:
+                db.execute('DELETE FROM password_resets')
+                db.execute("UPDATE email_outbox SET status='cancelled',payload='',lease=NULL,lease_until=NULL,last_error='Recuperação de senha desativada.',updated_at=:time WHERE kind IN ('password_reset','password_changed') AND status IN ('queued','sending','retrying')", {'time': datetime.now(timezone.utc).isoformat()})
             row['version'] += 1
             row['updated_at'] = datetime.now(timezone.utc).isoformat()
-            db.execute('UPDATE configuration SET version=:version,openwa_key=:openwa_key,resend_key=:resend_key,email_from=:email_from,invitation_email_enabled=:invitation_email_enabled,updated_at=:updated_at WHERE id=1', row)
+            db.execute('UPDATE configuration SET version=:version,openwa_key=:openwa_key,resend_key=:resend_key,email_from=:email_from,invitation_email_enabled=:invitation_email_enabled,password_reset_enabled=:password_reset_enabled,updated_at=:updated_at WHERE id=1', row)
             audit(db, user['email'], 'integrations.updated')
             return public(row)
 
@@ -313,6 +325,8 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
 
     from backend.foundation import register_foundation
     register_foundation(app, storage, actor, superadmin, rate_limit, allowed_origin, email, outbox)
+    from backend.password_reset import register_password_reset
+    register_password_reset(app, storage, outbox, rate_limit, secure_cookie)
     from backend.operations import register_operations
     register_operations(app, storage, actor, rate_limit, cipher)
     return app

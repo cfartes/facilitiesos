@@ -1,4 +1,4 @@
-"""Convites transacionais; corpo cifrado, lease e retentativas dentro da janela de idempotência."""
+"""E-mails de acesso transacionais, cifrados e com retentativas limitadas."""
 import asyncio
 import json
 import logging
@@ -29,22 +29,25 @@ class EmailOutbox:
 
     def audit(self, db, company, user_id, action):
         db.execute('INSERT INTO audit(actor,action,created_at,company_id,entity_id) VALUES(:actor,:action,:time,:company,:user)', {
-            'actor': 'system:invitation-email', 'action': action, 'time': self.timestamp(), 'company': company, 'user': user_id,
+            'actor': 'system:account-email', 'action': action, 'time': self.timestamp(), 'company': company, 'user': user_id,
         })
 
-    def settings(self, db):
-        row = db.execute('SELECT invitation_email_enabled,resend_key,email_from FROM configuration WHERE id=1').fetchone()
-        return {'enabled': bool(row['invitation_email_enabled'] and row['resend_key'] and row['email_from'])}
+    def settings(self, db, kind='invitation'):
+        row = db.execute('SELECT invitation_email_enabled,password_reset_enabled,resend_key,email_from FROM configuration WHERE id=1').fetchone()
+        flag = 'invitation_email_enabled' if kind == 'invitation' else 'password_reset_enabled'
+        return {'enabled': bool(row[flag] and row['resend_key'] and row['email_from'])}
 
-    def cancel(self, db, user_id, reason):
-        db.execute(f"UPDATE email_outbox SET status='cancelled',payload='',lease=NULL,lease_until=NULL,last_error=:reason,updated_at=:time WHERE user_id=:user AND status IN {ACTIVE}", {
-            'user': user_id, 'reason': reason, 'time': self.timestamp(),
+    def cancel(self, db, user_id, reason, kind=None):
+        db.execute(f"UPDATE email_outbox SET status='cancelled',payload='',lease=NULL,lease_until=NULL,last_error=:reason,updated_at=:time WHERE user_id=:user AND status IN {ACTIVE}" + (' AND kind=:kind' if kind else ''), {
+            'user': user_id, 'reason': reason, 'time': self.timestamp(), 'kind': kind,
         })
 
-    def enqueue(self, db, user, token, expires):
+    def enqueue(self, db, user, token, expires, kind='invitation'):
+        if kind not in ('invitation', 'password_reset', 'password_changed'):
+            raise ValueError('Unsupported account email')
         config = db.execute('SELECT * FROM configuration WHERE id=1').fetchone()
-        if not config['invitation_email_enabled'] or not config['resend_key'] or not config['email_from']:
-            raise HTTPException(409, 'O envio de convites por e-mail está desativado. Gere o link manual ou solicite a configuração ao Superadmin.')
+        if not self.settings(db, kind)['enabled']:
+            raise HTTPException(409, 'O envio por e-mail está desativado. Solicite a configuração ao Superadmin.')
         try:
             key = self.cipher.decrypt(config['resend_key'].encode()).decode()
         except (InvalidToken, ValueError):
@@ -58,19 +61,30 @@ class EmailOutbox:
                            f"Defina sua senha pelo link: {self.origin}/convite#token={token}\n\n"
                            'O convite tem validade de 48 horas a partir da geração, é individual e de uso único. '
                            'Se você não esperava este convite, ignore a mensagem. Não compartilhe este link.'}
+        if kind == 'password_reset':
+            payload['subject'] = 'Recuperação de senha — Nexus Facilities OS'
+            payload['text'] = (f"Olá, {user['name']}.\n\nFoi solicitada uma nova senha para seu acesso ao Nexus Facilities OS.\n\n"
+                               f"Use este link em até 30 minutos a partir da solicitação: {self.origin}/redefinir-senha#token={token}\n\n"
+                               'O link é individual e de uso único. Se você não fez o pedido, ignore esta mensagem. Sua senha atual continua válida.')
+        elif kind == 'password_changed':
+            payload['subject'] = 'Sua senha foi alterada — Nexus Facilities OS'
+            payload['text'] = (f"Olá, {user['name']}.\n\nA senha do seu acesso ao Nexus Facilities OS foi alterada. "
+                               'As sessões anteriores foram encerradas. Se você não reconhece esta alteração, contate imediatamente o administrador da sua empresa. '
+                               'Este aviso não contém sua senha nem um link de acesso.')
         identifier = str(uuid4())
-        db.execute('''INSERT INTO email_outbox(id,company_id,user_id,invitation_hash,payload,credential_hash,status,expires,next_attempt_at,created_at,updated_at)
-            VALUES(:id,:company,:user,:hash,:payload,:credential,'queued',:expires,:next,:time,:time)''', {
+        db.execute('''INSERT INTO email_outbox(id,company_id,user_id,invitation_hash,kind,payload,credential_hash,status,expires,next_attempt_at,created_at,updated_at)
+            VALUES(:id,:company,:user,:hash,:kind,:payload,:credential,'queued',:expires,:next,:time,:time)''', {
             'id': identifier, 'company': user['company_id'], 'user': user['id'], 'hash': digest(token),
+            'kind': kind,
             'payload': self.cipher.encrypt(json.dumps(payload).encode()).decode(), 'credential': digest(key),
             'expires': expires, 'next': self.clock(), 'time': self.timestamp(),
         })
-        self.audit(db, user['company_id'], user['id'], 'invitation_email.queued')
+        self.audit(db, user['company_id'], user['id'], ('invitation_email' if kind == 'invitation' else kind + '_email') + '.queued')
 
     def statuses(self, db, company):
         rows = db.execute('''SELECT user_id,status,attempts,last_error,updated_at FROM (
             SELECT user_id,status,attempts,last_error,updated_at,ROW_NUMBER() OVER(PARTITION BY user_id ORDER BY created_at DESC,id DESC) AS position
-            FROM email_outbox WHERE company_id=:company) ranked WHERE position=1''', {'company': company}).fetchall()
+            FROM email_outbox WHERE company_id=:company AND kind='invitation') ranked WHERE position=1''', {'company': company}).fetchall()
         return {row['user_id']: {key: row[key] for key in ('status','attempts','last_error','updated_at')} for row in rows}
 
     def _finish(self, db, row, state, message='', provider_id=None, next_attempt=None):
@@ -78,7 +92,7 @@ class EmailOutbox:
             payload=CASE WHEN :keep=1 THEN payload ELSE '' END,next_attempt_at=:next,updated_at=:time
             WHERE id=:id''', {'status': state, 'error': message, 'provider': provider_id,
                              'keep': int(state == 'retrying'), 'next': next_attempt or self.clock(), 'time': self.timestamp(), 'id': row['id']})
-        self.audit(db, row['company_id'], row['user_id'], 'invitation_email.' + state)
+        self.audit(db, row['company_id'], row['user_id'], ('invitation_email' if row['kind'] == 'invitation' else row['kind'] + '_email') + '.' + state)
 
     def _claim(self):
         current = self.clock()
@@ -86,18 +100,30 @@ class EmailOutbox:
             db.execute('BEGIN IMMEDIATE')
             # Cancelar também enquanto o envio estiver desabilitado, limpando tokens inválidos.
             db.execute(f'''UPDATE email_outbox SET status='cancelled',payload='',lease=NULL,lease_until=NULL,
-                last_error='Convite expirado, utilizado ou revogado.',updated_at=:time WHERE status IN {ACTIVE} AND (
-                expires<=:now OR NOT EXISTS(SELECT 1 FROM invitations i JOIN users u ON u.id=i.user_id JOIN companies c ON c.id=u.company_id
+                last_error='Solicitação expirada, utilizada ou revogada.',updated_at=:time WHERE status IN {ACTIVE} AND (
+                expires<=:now OR (kind='invitation' AND NOT EXISTS(SELECT 1 FROM invitations i JOIN users u ON u.id=i.user_id JOIN companies c ON c.id=u.company_id
                     JOIN auth_accounts a ON a.user_id=u.id WHERE i.token_hash=email_outbox.invitation_hash AND i.user_id=email_outbox.user_id
-                    AND i.used_at IS NULL AND i.expires>:now AND u.is_active=1 AND c.is_active=1 AND a.password_hash IS NULL))''', {'now': current, 'time': self.timestamp()})
-            if not self.settings(db)['enabled']:
-                return None
-            row = db.execute("""SELECT * FROM email_outbox WHERE (status IN ('queued','retrying') AND next_attempt_at<=:now)
-                OR (status='sending' AND lease_until<=:now) ORDER BY next_attempt_at,id LIMIT 1""", {'now': current}).fetchone()
+                    AND i.used_at IS NULL AND i.expires>:now AND u.is_active=1 AND c.is_active=1 AND a.password_hash IS NULL))
+                OR (kind='password_reset' AND NOT EXISTS(SELECT 1 FROM password_resets r JOIN users u ON u.id=r.user_id
+                    JOIN companies c ON c.id=u.company_id JOIN auth_accounts a ON a.user_id=u.id
+                    WHERE r.token_hash=email_outbox.invitation_hash AND r.user_id=email_outbox.user_id AND r.used_at IS NULL AND r.expires>:now
+                    AND u.is_active=1 AND c.is_active=1 AND a.password_hash IS NOT NULL))
+                OR (kind='password_changed' AND NOT EXISTS(SELECT 1 FROM users u JOIN companies c ON c.id=u.company_id
+                    WHERE u.id=email_outbox.user_id AND u.is_active=1 AND c.is_active=1)))''', {'now': current, 'time': self.timestamp()})
+            row = db.execute("""SELECT * FROM email_outbox WHERE (((status IN ('queued','retrying') AND next_attempt_at<=:now)
+                OR (status='sending' AND lease_until<=:now))) AND ((kind='invitation' AND :invitations=1) OR
+                (kind IN ('password_reset','password_changed') AND :resets=1)) ORDER BY next_attempt_at,id LIMIT 1""", {
+                    'now': current, 'invitations': int(self.settings(db)['enabled']), 'resets': int(self.settings(db, 'password_reset')['enabled']),
+                }).fetchone()
             if not row:
                 return None
+            if row['kind'] == 'password_reset':
+                credential = db.execute('SELECT r.credential_hash,a.password_hash FROM password_resets r JOIN auth_accounts a ON a.user_id=r.user_id WHERE r.token_hash=:token', {'token': row['invitation_hash']}).fetchone()
+                if not credential or credential['credential_hash'] != digest(credential['password_hash']):
+                    self._finish(db, row, 'cancelled', 'A credencial da conta foi alterada.')
+                    return False
             if row['attempts'] >= MAX_ATTEMPTS or (row['first_attempt_at'] is not None and current >= row['first_attempt_at'] + RETRY_WINDOW):
-                self._finish(db, row, 'failed', 'Limite ou janela segura de tentativas atingido. Gere novo convite se necessário.')
+                self._finish(db, row, 'failed', 'Limite ou janela segura de tentativas atingido. Solicite novo link de acesso se necessário.')
                 return False
             config = db.execute('SELECT resend_key FROM configuration WHERE id=1').fetchone()
             try:
@@ -106,7 +132,7 @@ class EmailOutbox:
                 if digest(key) != row['credential_hash']:
                     raise ValueError('credentials changed')
             except (InvalidToken, ValueError, UnicodeError):
-                self._finish(db, row, 'failed', 'Configuração ou conteúdo do envio alterado/indisponível. Gere novo convite após revisar a integração.')
+                self._finish(db, row, 'failed', 'Configuração ou conteúdo do envio alterado/indisponível. Solicite novo link após revisar a integração.')
                 return False
             lease = str(uuid4())
             db.execute("UPDATE email_outbox SET status='sending',attempts=attempts+1,first_attempt_at=COALESCE(first_attempt_at,:now),lease=:lease,lease_until=:until,updated_at=:time WHERE id=:id", {
@@ -123,11 +149,11 @@ class EmailOutbox:
         row, key, payload = claimed
         provider_id, failure = None, None
         try:
-            provider_id = providers.resend_invitation(key, payload, 'facilities-invite/' + row['id'])
+            provider_id = providers.resend_invitation(key, payload, ('facilities-invite/' if row['kind'] == 'invitation' else 'facilities-account/') + row['id'])
         except providers.InvitationSendError as error:
             failure = error
         except Exception:
-            failure = providers.InvitationSendError('Falha interna no envio. Revise a configuração antes de gerar novo convite.')
+            failure = providers.InvitationSendError('Falha interna no envio. Revise a configuração antes de solicitar novo link.')
         with self.storage.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             fresh = db.execute('SELECT status,lease FROM email_outbox WHERE id=:id', {'id': row['id']}).fetchone()
@@ -139,7 +165,7 @@ class EmailOutbox:
                 delay = max(RETRY_DELAYS[min(row['attempts'] - 1, len(RETRY_DELAYS) - 1)], failure.retry_after)
                 next_attempt = self.clock() + delay
                 retry = failure.retryable and row['attempts'] < MAX_ATTEMPTS and next_attempt < min(row['expires'], row['first_attempt_at'] + RETRY_WINDOW)
-                message = str(failure) if retry or not failure.retryable else 'Limite ou janela segura de tentativas atingido. O resultado do envio não está confirmado; revise antes de gerar novo convite.'
+                message = str(failure) if retry or not failure.retryable else 'Limite ou janela segura de tentativas atingido. O resultado do envio não está confirmado; revise antes de solicitar novo link.'
                 self._finish(db, row, 'retrying' if retry else 'failed', message, next_attempt=next_attempt)
         return True
 
@@ -148,7 +174,7 @@ class EmailOutbox:
             try:
                 await asyncio.to_thread(self.process_one)
             except Exception:
-                logging.getLogger(__name__).warning('Processamento de convites indisponível; nova verificação será feita.')
+                logging.getLogger(__name__).warning('Processamento de e-mails de acesso indisponível; nova verificação será feita.')
             try:
                 await asyncio.wait_for(stop.wait(), timeout=2)
             except TimeoutError:

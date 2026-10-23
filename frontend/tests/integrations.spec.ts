@@ -8,6 +8,7 @@ async function mockApi(page: Page, configured = false) {
     openwa_key_configured: configured,
     resend_key_configured: configured,
     invitation_email_enabled: false,
+    password_reset_enabled: false,
     email_from: configured ? "sender@example.com" : "",
     updated_at: null as string | null,
   };
@@ -42,6 +43,8 @@ async function mockApi(page: Page, configured = false) {
           email_from: data.email_from ?? config.email_from,
           invitation_email_enabled:
             !!data.invitation_email_enabled && !data.clear_resend_key,
+          password_reset_enabled:
+            !!data.password_reset_enabled && !data.clear_resend_key,
           openwa_key_configured: data.clear_openwa_key
             ? false
             : !!data.openwa_api_key || config.openwa_key_configured,
@@ -125,6 +128,7 @@ test("habilitação de convites é salva e remover a chave a desativa", async ({
   const choice = page.getByLabel("Habilitar envio de convites por e-mail");
   await expect(choice).not.toBeChecked();
   await choice.check();
+  await page.getByLabel("Habilitar recuperação de senha por e-mail").check();
   await page.getByRole("button", { name: "Salvar configurações" }).click();
   await expect(
     page.getByText("Configurações salvas com sucesso."),
@@ -133,6 +137,9 @@ test("habilitação de convites é salva e remover a chave a desativa", async ({
   await page.getByLabel("Remover a chave Resend ao salvar").check();
   await expect(choice).not.toBeChecked();
   await expect(choice).toBeDisabled();
+  await expect(
+    page.getByLabel("Habilitar recuperação de senha por e-mail"),
+  ).not.toBeChecked();
   await page.getByRole("button", { name: "Salvar configurações" }).click();
   await expect(
     page.getByText("Configurações salvas com sucesso."),

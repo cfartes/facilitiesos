@@ -9,7 +9,9 @@ import {
 import { api } from "./api";
 import { errorMessage, Notice } from "./ui";
 
-export function AcceptInvitation() {
+export function AcceptInvitation({
+  passwordReset = false,
+}: { passwordReset?: boolean } = {}) {
   const [token] = useState(
     () => new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "",
   );
@@ -20,8 +22,12 @@ export function AcceptInvitation() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   useEffect(() => {
-    window.history.replaceState(null, "", "/convite");
-  }, []);
+    window.history.replaceState(
+      null,
+      "",
+      passwordReset ? "/redefinir-senha" : "/convite",
+    );
+  }, [passwordReset]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -32,7 +38,9 @@ export function AcceptInvitation() {
     setBusy(true);
     try {
       const result = await api<{ message: string }>(
-        "/public/invitations/accept",
+        passwordReset
+          ? "/public/password-reset/confirm"
+          : "/public/invitations/accept",
         "POST",
         { token, password },
       );
@@ -55,10 +63,16 @@ export function AcceptInvitation() {
         <span className="small-icon">
           <ShieldCheck size={25} />
         </span>
-        <span className="eyebrow">PRIMEIRO ACESSO</span>
-        <h1>Bem-vindo à sua operação</h1>
+        <span className="eyebrow">
+          {passwordReset ? "RECUPERAÇÃO DE ACESSO" : "PRIMEIRO ACESSO"}
+        </span>
+        <h1>
+          {passwordReset ? "Defina uma nova senha" : "Bem-vindo à sua operação"}
+        </h1>
         <p className="muted">
-          Defina sua senha para ativar o acesso concedido pela empresa.
+          {passwordReset
+            ? "Após a troca, suas sessões anteriores serão encerradas. Entre novamente para continuar."
+            : "Defina sua senha para ativar o acesso concedido pela empresa."}
         </p>
         {success ? (
           <>
@@ -69,8 +83,9 @@ export function AcceptInvitation() {
           </>
         ) : !token ? (
           <Notice error>
-            O link do convite está incompleto. Abra o link fornecido pelo
-            administrador ou solicite um novo convite.
+            {passwordReset
+              ? "O link de recuperação está incompleto. Abra o link recebido por e-mail ou solicite a recuperação novamente."
+              : "O link do convite está incompleto. Abra o link fornecido pelo administrador ou solicite um novo convite."}
           </Notice>
         ) : (
           <form onSubmit={submit}>
@@ -82,7 +97,7 @@ export function AcceptInvitation() {
                     id="new-password"
                     type={visible ? "text" : "password"}
                     minLength={12}
-                    maxLength={1024}
+                    maxLength={passwordReset ? 128 : 1024}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
@@ -99,7 +114,9 @@ export function AcceptInvitation() {
                   </button>
                 </div>
                 <small id="password-hint">
-                  Use pelo menos 12 caracteres e uma senha exclusiva.
+                  {passwordReset
+                    ? "Use de 12 a 128 caracteres, uma letra maiúscula e um caractere especial. Escolha uma senha diferente da atual."
+                    : "Use pelo menos 12 caracteres e uma senha exclusiva."}
                 </small>
               </div>
               <div className="field">
@@ -108,7 +125,7 @@ export function AcceptInvitation() {
                   id="confirm-password"
                   type="password"
                   minLength={12}
-                  maxLength={1024}
+                  maxLength={passwordReset ? 128 : 1024}
                   autoComplete="new-password"
                   required
                   value={confirmation}
@@ -122,14 +139,27 @@ export function AcceptInvitation() {
                 ) : (
                   <ShieldCheck size={17} />
                 )}
-                {busy ? "Ativando…" : "Ativar meu acesso"}
+                {busy
+                  ? passwordReset
+                    ? "Alterando…"
+                    : "Ativando…"
+                  : passwordReset
+                    ? "Alterar senha"
+                    : "Ativar meu acesso"}
               </button>
             </fieldset>
           </form>
         )}
         <p className="login-note">
-          Convite individual, válido por 48 horas e de uso único.
+          {passwordReset
+            ? "Link individual, válido por 30 minutos e de uso único."
+            : "Convite individual, válido por 48 horas e de uso único."}
         </p>
+        {passwordReset && !success && (
+          <p className="login-note">
+            <a href="/recuperar-senha">Solicitar recuperação novamente</a>
+          </p>
+        )}
       </section>
     </main>
   );

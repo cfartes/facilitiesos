@@ -2,7 +2,7 @@
 
 **Atualização:** 23/10/2026 — horário de Brasília.
 
-**Referência do código analisado:** branch `feat/foundation`, migrações até `0006`.
+**Referência do código analisado:** branch `feat/foundation`, migrações até `0007`.
 
 **Repositório:** [cfartes/facilitiesos](https://github.com/cfartes/facilitiesos).
 
@@ -60,7 +60,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | --- | --- | --- | --- |
 | Administração Nexus | Empresas, acesso administrativo e configurações globais | Parcial: Superadmin, empresas e integrações entregues; equipe Nexus e suporte autorizado pendentes | Fase 1 para o suporte necessário ao piloto; evolução administrativa conforme necessidade |
 | Cadastro da empresa | Dados equivalentes ao RotaFY, administrador inicial, ativação e suspensão; sem plano | Implementado | Fase 1 |
-| Identidade e acesso | Login individual, convite, perfis, escopos, recuperação e autenticação corporativa | Parcial: login, convite e permissões entregues; recuperação, MFA e SSO pendentes | Fase 1 para recuperação e requisitos do piloto; SSO conforme adoção corporativa |
+| Identidade e acesso | Login individual, convite, perfis, escopos, recuperação e autenticação corporativa | Parcial: login, convite, permissões e recuperação de contas das empresas entregues; recuperação Nexus, MFA e SSO pendentes | Fase 1 para requisitos do piloto; SSO conforme adoção corporativa |
 | Locais | Unidade, prédio, andar, ambiente, criticidade, fuso, responsáveis e calendário | Parcial: hierarquia, criticidade e fuso entregues | Fase 2 para calendário e organização ampliada |
 | Ativos | Identificação, categoria, local, situação, criticidade, documentos e histórico | Parcial: cadastro e histórico de ordens entregues; documentos próprios do ativo pendentes | Fase 1 para a base; fase 2 para documentação ampliada |
 | Categorias de serviço | Catálogo de tipos de atendimento | Implementado no cadastro básico | Fase 1; parametrizações de SLA/checklist em etapas seguintes |
@@ -70,7 +70,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo e fila de convites entregues; demais mensagens externas pendentes | Fase 1 |
 | Evidências | Texto, fotos e documentos privados conforme necessidade e autorização | Parcial: texto e fotos JPEG/PNG entregues; documentos gerais pendentes | Fase 1 para fotos; documentos após definição e validação próprias |
 | WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: chave e consulta de sessões entregues; fluxo operacional não implementado | Fase 1, condicionado à homologação do provedor |
-| E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: configuração, teste, convites opcionais, fila e retentativas entregues; demais mensagens e confirmação de entrega pendentes | Fase 1 |
+| E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: configuração, teste, convites, recuperação/aviso de senha, fila e retentativas entregues; demais mensagens e confirmação de entrega pendentes | Fase 1 |
 | Equipes e fornecedores | Equipes próprias, organizações prestadoras, cobertura e acesso restrito | Pendente; usuários técnicos individuais já existem | Fase 2 |
 | Contratos de serviço | Vigência, escopo, anexos, cobertura, metas, limites e vencimentos | Pendente | Fase 2 |
 | Calendários e SLA | Metas de resposta/resolução, horários úteis, feriados e pausas autorizadas | Pendente; fuso e registros iniciais de tempo já existem | Fase 2 |
@@ -99,6 +99,8 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 ### 5.2. Usuários e permissões
 
 - Login e logout por sessão em cookie; credenciais protegidas no servidor.
+- Recuperação de senha das contas ativas das empresas, com habilitação independente no Superadmin, resposta genérica e limites por IP/e-mail. Link de trinta minutos, de uso único, restrito à conta e à credencial vigente; pedidos repetidos não revogam o link válido.
+- Troca de senha transacional, com encerramento das sessões, invalidação de links anteriores e aviso por e-mail sem senha/link. O retorno é ao login normal. Contas Nexus não são recuperadas por esse fluxo público.
 - Convite de uso único, válido por 48 horas, para o usuário definir a própria senha.
 - Reemissão de convite com invalidação do anterior; compartilhamento manual ou envio opcional por Resend, habilitado pelo Superadmin.
 - Usuário/convite e envio gravados na mesma transação, com corpo criptografado enquanto pendente, no máximo cinco tentativas e chave de idempotência estável dentro da janela segura.
@@ -171,15 +173,15 @@ Limites atuais de imagens: **200 MiB de conteúdo normalizado por empresa**, dez
 | Integração | Disponível hoje | Ainda não disponível |
 | --- | --- | --- |
 | OpenWA | Chave no Superadmin, armazenamento criptografado, substituição/remoção e consulta de sessões | Pareamento dentro do app, vínculo exclusivo por empresa, entrada de mensagens, abertura guiada de ocorrências e envio de atualizações |
-| Resend | Chave, remetente, teste explícito, habilitação do envio de convites, fila transacional, retentativas limitadas e resultado do último envio por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
+| Resend | Chave, remetente, teste explícito, habilitação separada para convites/recuperação, fila transacional, retentativas limitadas e aviso de senha alterada; resultado do último convite por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
 | ViaCEP | Consulta de endereço pelo backend com preenchimento manual alternativo | Não é integração operacional de atendimento |
 
 Chave cadastrada não comprova conexão ativa. Aceite de e-mail pelo provedor não comprova entrega. O guia OpenWA recebido documenta envio/consulta, mas não define o contrato de webhooks necessário ao recebimento.
 
 ### 5.8. Segurança e estrutura técnica
 
-- PostgreSQL local isolado, com migrações incrementais até `0006` e preservação dos dados existentes.
-- RLS/FORCE RLS nas dezenove tabelas privadas; metadados de migração separados.
+- PostgreSQL local isolado, com migrações incrementais até `0007` e preservação dos dados existentes.
+- RLS/FORCE RLS nas vinte tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.
 - Escopo de empresa por transação e verificações adicionais por unidade, objeto e perfil na API.
 - Sessões e convites autenticados por hash; segredos de integração, conteúdo das fotos e corpo temporário de convites na fila criptografados. O corpo da fila é limpo quando o processamento termina ou é cancelado.
@@ -197,7 +199,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | Prioridade | Pendência | Resultado necessário |
 | --- | --- | --- |
 | 1 | Homologação real de convites Resend | Fluxo, fila, limites e consulta de falhas implementados; falta validar domínio, conta, remetente, origem acessível e recebimento real |
-| 1 | Recuperação de senha | Solicitação sem exposição de existência da conta, token temporário de uso único, limites e revogação de sessões apropriada |
+| 1 | Homologação da recuperação de senha | Fluxo para contas das empresas implementado e testado; validar recebimento real, disponibilidade e procedimento de suporte. Recuperação Nexus continua administrativa |
 | 1 | WhatsApp via OpenWA | Homologar eventos recebidos, verificar identidade e empresa/unidade, vincular sessão, abrir relato guiado e enviar protocolo somente após persistência |
 | 1 | Confiabilidade de mensagens | Distinguir enfileirado, aceito pelo provedor, entregue quando comprovado e falho; evitar duplicação e permitir reprocessamento autorizado |
 | 1 | Privacidade e páginas legais do Facilities | Adaptar termos, política, cookies e compartilhamentos; disponibilizar canal e acompanhamento dos pedidos de titulares com procedimentos definidos |
@@ -323,7 +325,7 @@ Planos de uso e cobrança por plano não fazem parte do escopo definido para est
 
 ## 10. Sequência recomendada de desenvolvimento
 
-1. **Fechar acesso e e-mail:** homologar o envio de convites já implementado e desenvolver recuperação de senha; mensagens operacionais e confirmação de entrega seguem como incrementos próprios.
+1. **Homologar acesso e e-mail:** convites e recuperação de senha das empresas já implementados; validar recebimento e suporte. Mensagens operacionais, recuperação Nexus e confirmação de entrega seguem como incrementos próprios.
 2. **Homologar OpenWA em paralelo à preparação operacional:** obter o contrato de eventos, validar identidade, sessão por empresa e abertura guiada sem duplicação.
 3. **Completar o piloto web:** informação adicional no relato, checklist, filtros e regras de evidência acordadas com a unidade piloto.
 4. **Preparar entrada em produção:** privacidade, suporte autorizado, autenticação necessária, infraestrutura e restauração; homologar os fluxos ponta a ponta.
@@ -335,9 +337,9 @@ Decisões operacionais ainda necessárias: cliente/unidade piloto, categorias in
 
 ## 11. Validação e atualização deste documento
 
-A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de convites](backend/email_outbox.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
+A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de e-mails de acesso](backend/email_outbox.py), [recuperação de senha](backend/password_reset.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
 
-As verificações registraram suíte de API em SQLite/PostgreSQL, build e 34 cenários web aprovados, incluindo três fluxos com API real, fila com provedor simulado, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
+As verificações registraram suíte de API em SQLite/PostgreSQL, build e 37 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
 
 O ambiente local de validação é [Nexus Facilities OS dev](http://127.0.0.1:5180/nexus/empresas), quando os serviços locais estiverem em execução. Não há implantação externa de produção documentada como concluída.
 

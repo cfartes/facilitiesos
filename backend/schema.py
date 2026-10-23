@@ -7,7 +7,8 @@ configuration = Table('configuration', metadata,
     Column('id', Integer, primary_key=True), Column('version', Integer, nullable=False, server_default='0'),
     Column('openwa_key', Text, nullable=False, server_default=''), Column('resend_key', Text, nullable=False, server_default=''),
     Column('email_from', Text, nullable=False, server_default=''), Column('updated_at', Text),
-    Column('invitation_email_enabled', Integer, nullable=False, server_default='0'))
+    Column('invitation_email_enabled', Integer, nullable=False, server_default='0'),
+    Column('password_reset_enabled', Integer, nullable=False, server_default='0'))
 sessions = Table('sessions', metadata,
     Column('token_hash', Text, primary_key=True), Column('csrf_hash', Text, nullable=False),
     Column('email', Text, nullable=False), Column('role', Text, nullable=False), Column('expires', Float, nullable=False),
@@ -46,9 +47,16 @@ invitations = Table('invitations', metadata,
     Column('token_hash', Text, primary_key=True), Column('user_id', String(36), ForeignKey('users.id'), nullable=False),
     Column('expires', Float, nullable=False), Column('used_at', Text))
 Index('uq_locations_company_unit_id', locations.c.company_id, locations.c.unit_id, locations.c.id, unique=True)
+password_resets = Table('password_resets', metadata,
+    Column('user_id', String(36), primary_key=True), Column('company_id', String(36), nullable=False),
+    Column('token_hash', String(64), nullable=False, unique=True), Column('credential_hash', String(64), nullable=False),
+    Column('expires', Float, nullable=False), Column('used_at', Text),
+    ForeignKeyConstraint(['company_id','user_id'], ['users.company_id','users.id']))
 email_outbox = Table('email_outbox', metadata,
+    # invitation_hash é o nome legado do identificador de token/evento; kind separa suas finalidades.
     Column('id', String(36), primary_key=True), Column('company_id', String(36), nullable=False),
     Column('user_id', String(36), nullable=False), Column('invitation_hash', String(64), nullable=False, unique=True),
+    Column('kind', String(30), nullable=False, server_default='invitation'),
     Column('payload', Text, nullable=False), Column('credential_hash', String(64), nullable=False),
     Column('status', String(20), nullable=False), Column('attempts', Integer, nullable=False, server_default='0'),
     Column('expires', Float, nullable=False), Column('next_attempt_at', Float, nullable=False),
@@ -76,6 +84,10 @@ def migrate_schema(engine):
         metadata.create_all(connection)
         if 'invitation_email_enabled' not in {item['name'] for item in inspect(connection).get_columns('configuration')}:
             connection.execute(text('ALTER TABLE configuration ADD COLUMN invitation_email_enabled INTEGER NOT NULL DEFAULT 0'))
+        if 'password_reset_enabled' not in {item['name'] for item in inspect(connection).get_columns('configuration')}:
+            connection.execute(text('ALTER TABLE configuration ADD COLUMN password_reset_enabled INTEGER NOT NULL DEFAULT 0'))
+        if 'kind' not in {item['name'] for item in inspect(connection).get_columns('email_outbox')}:
+            connection.execute(text("ALTER TABLE email_outbox ADD COLUMN kind VARCHAR(30) NOT NULL DEFAULT 'invitation'"))
         columns = {item['name'] for item in inspect(connection).get_columns('audit')}
         for name in ('company_id', 'unit_id', 'entity_id'):
             if name not in columns:
@@ -89,7 +101,7 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004', '0005', '0006'):
+        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)
@@ -98,7 +110,7 @@ def migrate_schema(engine):
 
 def apply_policies(connection):
     connection.execute(text('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
-    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations','email_outbox')
+    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations','email_outbox','password_resets')
     tenant_tables = ('companies','users','locations','audit')
     connection.execute(text('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC'))
     connection.execute(text('GRANT USAGE ON SCHEMA public TO facilities_app,facilities_platform'))

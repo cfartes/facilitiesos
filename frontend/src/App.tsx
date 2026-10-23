@@ -30,6 +30,7 @@ import {
 import { api } from "./api";
 import { Foundation, type FoundationPage } from "./Foundation";
 import { AcceptInvitation } from "./Invitation";
+import { PasswordRecovery } from "./PasswordRecovery";
 import { Operations } from "./Operations";
 import type { OperationPage } from "./operationTypes";
 import type { User } from "./types";
@@ -41,6 +42,7 @@ type Configuration = {
   resend_key_configured: boolean;
   email_from: string;
   invitation_email_enabled?: boolean;
+  password_reset_enabled?: boolean;
   updated_at: string | null;
 };
 type Session = { id: string; name: string; status: string };
@@ -221,6 +223,9 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
             {busy ? "Entrando…" : "Entrar"}
           </button>
           <p className="login-note">
+            <a href="/recuperar-senha">Esqueci minha senha</a>
+          </p>
+          <p className="login-note">
             Primeiro acesso? Utilize o link enviado pelo administrador da sua
             empresa.
           </p>
@@ -237,6 +242,7 @@ function Integrations() {
   const [resend, setResend] = useState("");
   const [sender, setSender] = useState("");
   const [invitationEmailEnabled, setInvitationEmailEnabled] = useState(false);
+  const [passwordResetEnabled, setPasswordResetEnabled] = useState(false);
   const [removeOpenwa, setRemoveOpenwa] = useState(false);
   const [removeResend, setRemoveResend] = useState(false);
   const [recipient, setRecipient] = useState("");
@@ -255,7 +261,8 @@ function Integrations() {
       removeOpenwa ||
       removeResend ||
       sender !== config.email_from ||
-      invitationEmailEnabled !== !!config.invitation_email_enabled);
+      invitationEmailEnabled !== !!config.invitation_email_enabled ||
+      passwordResetEnabled !== !!config.password_reset_enabled);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -273,6 +280,7 @@ function Integrations() {
       setConfig(result);
       setSender(result.email_from);
       setInvitationEmailEnabled(!!result.invitation_email_enabled);
+      setPasswordResetEnabled(!!result.password_reset_enabled);
       setOpenwa("");
       setResend("");
       setRemoveOpenwa(false);
@@ -309,10 +317,12 @@ function Integrations() {
         clear_openwa_key: removeOpenwa,
         clear_resend_key: removeResend,
         invitation_email_enabled: invitationEmailEnabled,
+        password_reset_enabled: passwordResetEnabled,
       });
       setConfig(result);
       setSender(result.email_from);
       setInvitationEmailEnabled(!!result.invitation_email_enabled);
+      setPasswordResetEnabled(!!result.password_reset_enabled);
       setOpenwa("");
       setResend("");
       setRemoveOpenwa(false);
@@ -586,6 +596,27 @@ function Integrations() {
                     também serão retomados. Desabilitar pausa novos envios; não
                     recolhe mensagens já enviadas ou em andamento.
                   </p>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={passwordResetEnabled}
+                      disabled={
+                        removeResend ||
+                        (!resend && !config.resend_key_configured)
+                      }
+                      onChange={(event) => {
+                        setPasswordResetEnabled(event.target.checked);
+                        changed();
+                      }}
+                    />
+                    Habilitar recuperação de senha por e-mail
+                  </label>
+                  <p className="form-help">
+                    Disponível para contas ativas das empresas. Links válidos
+                    por 30 minutos. Desabilitar cancela pedidos pendentes e
+                    invalida os links já emitidos. O acesso Nexus continua sob
+                    administração da instalação.
+                  </p>
                   {config.resend_key_configured && (
                     <label className="checkbox danger">
                       <input
@@ -595,6 +626,7 @@ function Integrations() {
                           setRemoveResend(e.target.checked);
                           if (e.target.checked)
                             setInvitationEmailEnabled(false);
+                          if (e.target.checked) setPasswordResetEnabled(false);
                           setResend("");
                           changed();
                         }}
@@ -753,6 +785,10 @@ export function App() {
     }
   }
   if (window.location.pathname === "/convite") return <AcceptInvitation />;
+  if (window.location.pathname === "/recuperar-senha")
+    return <PasswordRecovery />;
+  if (window.location.pathname === "/redefinir-senha")
+    return <AcceptInvitation passwordReset />;
   if (loading)
     return (
       <main className="initial-loading" role="status">

@@ -140,7 +140,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
 
     def invite(db, user_id, send_email=False):
         token = secrets.token_urlsafe(48)
-        outbox.cancel(db, user_id, 'Convite substituído por uma nova emissão.')
+        outbox.cancel(db, user_id, 'Convite substituído por uma nova emissão.', kind='invitation')
         db.execute('DELETE FROM invitations WHERE user_id=:id', {'id': user_id})
         expires = time.time() + 48 * 3600
         db.execute('INSERT INTO invitations(token_hash,user_id,expires) VALUES(:token,:user,:expires)', {
@@ -224,6 +224,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
                 raise HTTPException(409, 'A empresa foi alterada. Recarregue antes de salvar.')
             if not data.is_active:
                 db.execute('DELETE FROM sessions WHERE email IN (SELECT email FROM users WHERE company_id=:id)', {'id': company})
+                db.execute('DELETE FROM password_resets WHERE company_id=:id', {'id': company})
                 db.execute("UPDATE email_outbox SET status='cancelled',payload='',lease=NULL,lease_until=NULL,last_error='Empresa suspensa.',updated_at=:time WHERE company_id=:company AND status IN ('queued','sending','retrying')", {'company': company, 'time': now()})
             record_audit(db, user, 'company.updated' if data.is_active else 'company.suspended', company, company)
             return company_public(db.execute('SELECT * FROM companies WHERE id=:id', {'id': company}).fetchone())
@@ -355,6 +356,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
             db.execute('DELETE FROM sessions WHERE email=:email', {'email': row['email']})
             if not data.is_active:
                 db.execute('DELETE FROM invitations WHERE user_id=:id', {'id': row['id']})
+                db.execute('DELETE FROM password_resets WHERE user_id=:id', {'id': row['id']})
                 outbox.cancel(db, row['id'], 'Usuário suspenso.')
             record_audit(db, user, 'user.access_updated', company, row['id'])
             return user_public(hydrate_user(db, row['email']))
@@ -389,7 +391,7 @@ def register_foundation(app, storage, actor, superadmin, rate_limit, origin, sup
                 raise HTTPException(400, 'Convite inválido, expirado ou já utilizado. Solicite um novo convite ao administrador.')
             db.execute('UPDATE invitations SET used_at=:used WHERE token_hash=:token', {'used': now(), 'token': token_hash})
             db.execute('UPDATE auth_accounts SET password_hash=:password WHERE user_id=:id', {'password': hashed, 'id': row['user_id']})
-            outbox.cancel(db, row['user_id'], 'Convite já utilizado.')
+            outbox.cancel(db, row['user_id'], 'Convite já utilizado.', kind='invitation')
             record_audit(db, {'email': row['email']}, 'user.invitation_accepted', row['company_id'], row['user_id'])
         return {'message': 'Acesso ativado. Entre com o e-mail do convite e sua nova senha.'}
 

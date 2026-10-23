@@ -7,10 +7,11 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0006` e RLS/FORCE RLS nas dezenove tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0007` e RLS/FORCE RLS nas vinte tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
+- Recuperação de senha de contas ativas das empresas, com habilitação própria no Superadmin, resposta genérica, limites de solicitações, link de trinta minutos/uso único, troca transacional, encerramento das sessões e aviso por e-mail. Pedidos repetidos não invalidam o link vigente. Recuperação de contas Nexus não faz parte desse fluxo.
 - Navegação e autorização de clientes; revogação de sessões ao alterar acesso ou suspender empresa.
 - Auditoria por empresa e unidade, com consulta dos últimos cem eventos autorizados.
 - Validação de API em SQLite/PostgreSQL, interface responsiva, teclado, Axe e fluxo de convite/login com API real.
@@ -31,7 +32,7 @@ Estados implementados: em triagem, atribuída, em execução, aguardando, resolv
 
 O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximo incremento: recuperação de senha com token temporário e proteção contra enumeração de contas, reutilizando a infraestrutura de e-mail sem ampliar as permissões dos convites. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Em seguida, completar as pendências do piloto web e iniciar calendários/SLA antes de fornecedores/contratos/custos.
+Próximo incremento: complementar o relato com texto e histórico antes de sua vinculação à OS, preservando o acesso privado do solicitante. Depois, checklist e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
 
