@@ -182,6 +182,8 @@ Chave cadastrada não comprova conexão ativa. O usuário confirmou o funcioname
 
 ### 5.8. Segurança e estrutura técnica
 
+- Instalador de produção para VPS Linux com Traefik existente, stack Docker isolada, geração e preservação de segredos e backup antes das atualizações. Imagens, migrações, login e backup verificados localmente; publicação e TLS na VPS ainda pendentes. Procedimento em [Instalação na VPS](infra/INSTALACAO_VPS.md).
+
 - PostgreSQL local isolado, com migrações incrementais até `0010` e preservação dos dados existentes.
 - RLS/FORCE RLS nas 26 tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.

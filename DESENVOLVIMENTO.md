@@ -6,6 +6,8 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 
 ## Entregue — integrações e fundação
 
+- Instalador Linux para VPS com Traefik existente, stack Docker própria, imagens de API/frontend, PostgreSQL privado e migração separada. Gera segredos, pede a senha do Superadmin no terminal, preserva credenciais nas reexecuções e faz backup antes das atualizações. Guia em `infra/INSTALACAO_VPS.md`. Verificado em containers locais; execução na VPS e validação pública permanecem pendentes.
+
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
 - Login no modelo visual do RotaFY: painel institucional, formulário com alternância de visibilidade da senha, versões de empresa/Nexus e apresentação compacta no celular. Autenticação e permissões existentes preservadas; redefinição web continua exclusiva das contas das empresas.
 - PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0010` e RLS/FORCE RLS nas 26 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.

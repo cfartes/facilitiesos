@@ -103,9 +103,10 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     app.state.email_outbox = outbox
 
     @app.get('/api/v1/health')
-    def health():
+    def health(response: Response):
         with connect() as db:
             db.execute('SELECT 1')
+        response.headers['X-Facilities-Release'] = os.getenv('FACILITIES_RELEASE', 'development')
         return {'status': 'ok'}
     from urllib.parse import urlsplit
     host = urlsplit(allowed_origin).hostname

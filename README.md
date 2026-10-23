@@ -39,6 +39,10 @@ O armazenamento no banco mantém arquivo, permissões e auditoria na mesma trans
 
 Limites de listagem: 500 categorias, 1.000 ativos, 500 ocorrências/ordens e 100 notificações. Detalhes exibem até 500 mensagens e eventos por ordem. Paginar antes de ampliar o piloto além desses limites; indicadores referem-se às ordens listadas.
 
+## Instalar na VPS
+
+Use o [instalador para a VPS com Traefik existente](infra/INSTALACAO_VPS.md). Ele cria uma stack própria de produção, gera os segredos e preserva o banco nas atualizações. O Superadmin padrão é `admin@facilities.dev`; informe a senha já definida no terminal da VPS. A publicação real e o TLS ainda precisam ser validados nesse ambiente.
+
 ## Executar no Windows
 
 Pré-requisitos: Python 3.12 ou superior, Node.js compatível com Vite 8 (Node 22.12+ ou 24) e Docker Desktop para o PostgreSQL local.

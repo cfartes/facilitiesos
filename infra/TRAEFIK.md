@@ -1,5 +1,7 @@
 # Facilities na VPS com Traefik existente
 
+Para instalar a stack completa, use [o instalador e seu guia](INSTALACAO_VPS.md). Os trechos abaixo continuam como referência de roteamento e homologação do webhook.
+
 Domínio informado: `facilities.nexusdataanalytics.tech`. Este documento é uma referência de integração; não cria outro Traefik nem altera os apps existentes. A publicação na VPS e o pareamento real dos eventos ainda precisam ser validados.
 
 ## Aplicação
