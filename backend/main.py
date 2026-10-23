@@ -178,7 +178,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         return user
 
     def public_user(user):
-        return {key: user[key] for key in ('email', 'role', 'name', 'company_id', 'roles', 'unit_ids', 'all_units') if key in user}
+        return {key: user[key] for key in ('id', 'email', 'role', 'name', 'company_id', 'roles', 'unit_ids', 'all_units') if key in user}
 
     def audit(db, user, action):
         db.execute('INSERT INTO audit(actor,action,created_at) VALUES(?,?,?)',
@@ -224,7 +224,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         if role == 'superadmin':
             return {'email': email, 'role': role, 'name': 'Administração Nexus', 'company_id': None, 'roles': [], 'unit_ids': [], 'all_units': True}
         import json
-        return {'email': account_email, 'role': role, 'name': profile['name'], 'company_id': profile['company_id'],
+        return {'id': profile['id'], 'email': account_email, 'role': role, 'name': profile['name'], 'company_id': profile['company_id'],
                 'roles': json.loads(profile['roles_json']), 'unit_ids': json.loads(profile['unit_ids_json']), 'all_units': bool(profile['all_units'])}
 
     @app.get('/api/v1/auth/me')
@@ -290,4 +290,6 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
 
     from backend.foundation import register_foundation
     register_foundation(app, storage, actor, superadmin, rate_limit, allowed_origin, email)
+    from backend.operations import register_operations
+    register_operations(app, storage, actor, rate_limit)
     return app

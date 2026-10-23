@@ -1,5 +1,5 @@
 """Migrações incrementais; não recria tabelas ou elimina dados existentes."""
-from sqlalchemy import Column, Float, ForeignKey, ForeignKeyConstraint, Integer, MetaData, String, Table, Text, UniqueConstraint, inspect, text
+from sqlalchemy import Column, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, MetaData, String, Table, Text, UniqueConstraint, inspect, text
 
 metadata = MetaData()
 versions = Table('schema_versions', metadata, Column('version', String(20), primary_key=True))
@@ -44,12 +44,22 @@ accounts = Table('auth_accounts', metadata, Column('user_id', String(36), Foreig
 invitations = Table('invitations', metadata,
     Column('token_hash', Text, primary_key=True), Column('user_id', String(36), ForeignKey('users.id'), nullable=False),
     Column('expires', Float, nullable=False), Column('used_at', Text))
+Index('uq_locations_company_unit_id', locations.c.company_id, locations.c.unit_id, locations.c.id, unique=True)
+Index('uq_users_company_id', users.c.company_id, users.c.id, unique=True)
+from backend.operation_schema import register_tables, apply_operation_policies
+register_tables(metadata)
 
 
 def migrate_schema(engine):
     with engine.begin() as connection:
         if engine.dialect.name == 'postgresql':
             connection.execute(text('SELECT pg_advisory_xact_lock(741000)'))
+        # Índices das tabelas anteriores devem existir antes das novas FKs compostas.
+        existing = set(inspect(connection).get_table_names())
+        for table in (locations, users):
+            if table.name in existing:
+                for index in table.indexes:
+                    index.create(connection, checkfirst=True)
         metadata.create_all(connection)
         columns = {item['name'] for item in inspect(connection).get_columns('audit')}
         for name in ('company_id', 'unit_id', 'entity_id'):
@@ -64,10 +74,11 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003'):
+        for version in ('0001', '0002', '0003', '0004'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)
+            apply_operation_policies(connection)
 
 
 def apply_policies(connection):

@@ -18,7 +18,7 @@ def main():
     engine = create_engine(url, hide_parameters=True)
     try:
         migrate_schema(engine)
-        print('Migrações até 0003 aplicadas. Dados existentes preservados.')
+        print('Migrações até 0004 aplicadas. Dados existentes preservados.')
     finally:
         engine.dispose()
 

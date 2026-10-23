@@ -55,7 +55,7 @@ class Database:
                     row = connection.execute(text('SELECT rolname,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user')).mappings().one()
                     if row['rolname'] != expected or any(row[key] for key in ('rolsuper', 'rolbypassrls', 'rolcreatedb', 'rolcreaterole')):
                         raise RuntimeError('Papel de runtime inválido: use facilities_app/platform sem privilégios administrativos ou BYPASSRLS.')
-                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003')")).scalar_one() != 3:
+                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004')")).scalar_one() != 4:
                         raise RuntimeError('Execute python -m backend.migrate antes de iniciar a API.')
                     protected = connection.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations') AND c.relrowsecurity AND c.relforcerowsecurity")).scalar_one()
                     if protected != 9:
@@ -86,6 +86,11 @@ class Database:
                 connection.execute(text("SELECT set_config('app.company_id', :company, true), set_config('app.all_units', :all_units, true), set_config('app.unit_ids', :units, true)"), {
                     'company': company_id, 'all_units': 'true' if actor['all_units'] else 'false',
                     'units': ','.join(actor['unit_ids']),
+                })
+                roles = set(actor.get('roles', []))
+                connection.execute(text("SELECT set_config('app.user_id', :user_id, true), set_config('app.manage_operations', :manage, true), set_config('app.review_operations', :review, true)"), {
+                    'user_id': actor.get('id', ''), 'manage': 'true' if roles & {'company_admin','supervisor'} else 'false',
+                    'review': 'true' if roles & {'manager','auditor'} else 'false',
                 })
             yield Connection(connection)
 
