@@ -5,7 +5,7 @@ Atualizado em 23/10/2026. Referências: PDF funcional v1.0, diretrizes de segura
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais e RLS/FORCE RLS nas nove tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0004` e RLS/FORCE RLS nas dezessete tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
@@ -15,17 +15,18 @@ Atualizado em 23/10/2026. Referências: PDF funcional v1.0, diretrizes de segura
 
 O convite ainda é compartilhado manualmente por link. Calendários de funcionamento, equipes e organizações fornecedoras não estão implementados. O cadastro de fuso não equivale ao motor de SLA. Limites iniciais de listagem: 500 empresas, 1.000 usuários por empresa, 5.000 locais por empresa; paginar antes de ampliar essas escalas.
 
-## Próximo bloco — operação do piloto
+## Entregue — operação do piloto
 
 1. Ativos básicos vinculados aos locais, categorias de serviço e responsáveis.
 2. Ocorrência separada da ordem de serviço, com vários relatos por ordem.
 3. Triagem por impacto/urgência; atribuição e execução com transições autorizadas.
 4. Mensagens compartilhadas e notas internas com permissões distintas.
-5. Arquivos privados com limites, validação e verificação de conteúdo.
-6. Resolução com evidências, confirmação/contestação e reabertura justificada.
-7. Notificações internas e convites por e-mail com fila e tratamento de falhas.
+5. Resolução com evidência textual, confirmação/contestação pelo solicitante e reabertura justificada.
+6. Notificações internas individuais, com leitura protegida por usuário.
 
-Estados propostos: em triagem, atribuída, em execução, aguardando, resolvida e concluída; cancelamento e reabertura auditados. Conclusão automática permanece desabilitada no piloto. Solicitações críticas não devem depender exclusivamente do WhatsApp.
+Estados implementados: em triagem, atribuída, em execução, aguardando, resolvida e concluída; cancelamento e reabertura auditados. Conclusão automática permanece desabilitada no piloto. Uma contestação retoma a execução e abre novo ciclo; a próxima resolução exige novas confirmações. Atribuição preserva a primeira resposta registrada. Espera ainda não calcula nem pausa SLA. Solicitações críticas não devem depender exclusivamente do WhatsApp.
+
+O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos privados/verificação de conteúdo e convites por e-mail com fila e tratamento de falhas seguem pendentes antes de ampliar o piloto.
 
 ## WhatsApp no piloto
 

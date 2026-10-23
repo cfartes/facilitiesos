@@ -104,14 +104,15 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
                 response = JSONResponse({'detail': 'Origem não autorizada.'}, status_code=403)
             else:
                 # Interrompe a leitura ao atingir o limite, inclusive sem Content-Length.
+                limit = 65536 if request.url.path.startswith('/api/v1/operations/') else 24000
                 body = b''
                 async for chunk in request.stream():
                     body += chunk
-                    if len(body) > 24000:
+                    if len(body) > limit:
                         break
                 request._body = body
                 response = (JSONResponse({'detail': 'Requisição muito grande.'}, status_code=413)
-                            if len(body) > 24000 else await call_next(request))
+                            if len(body) > limit else await call_next(request))
         else:
             response = await call_next(request)
         response.headers.update({

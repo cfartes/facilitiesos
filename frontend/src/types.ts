@@ -1,4 +1,5 @@
 export type User = {
+  id?: string;
   email: string;
   role: "superadmin" | "company_user";
   name?: string;

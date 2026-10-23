@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { CompanyForm } from "./CompanyForm";
+import { actionNames } from './operationTypes';
 import { errorMessage, Loading, Modal, Notice } from "./ui";
 import type { Company, Invitation, Location, Member, User } from "./types";
 
@@ -52,6 +53,10 @@ const roles: Record<string, string> = {
   company_admin: "Administrador da empresa",
 };
 const actions: Record<string, string> = {
+  ...actionNames,
+  'category.created':'Categoria cadastrada', 'category.updated':'Categoria atualizada',
+  'asset.created':'Ativo cadastrado', 'asset.updated':'Ativo atualizado', 'occurrence.created':'Ocorrência registrada',
+  'order.message_added':'Mensagem registrada na ordem',
   "company.created": "Empresa cadastrada",
   "user.initial_admin_created": "Administrador inicial cadastrado",
   "company.updated": "Empresa atualizada",

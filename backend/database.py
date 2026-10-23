@@ -3,7 +3,7 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import bindparam, create_engine, event, text
 
 
 class Record(dict):
@@ -57,8 +57,10 @@ class Database:
                         raise RuntimeError('Papel de runtime inválido: use facilities_app/platform sem privilégios administrativos ou BYPASSRLS.')
                     if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004')")).scalar_one() != 4:
                         raise RuntimeError('Execute python -m backend.migrate antes de iniciar a API.')
-                    protected = connection.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations') AND c.relrowsecurity AND c.relforcerowsecurity")).scalar_one()
-                    if protected != 9:
+                    from backend.operation_schema import OP_TABLES
+                    tables = ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations') + OP_TABLES
+                    protected = connection.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN :tables AND c.relrowsecurity AND c.relforcerowsecurity").bindparams(bindparam('tables', expanding=True)), {'tables': tables}).scalar_one()
+                    if protected != len(tables):
                         raise RuntimeError('As políticas RLS/FORCE RLS da fundação não estão completas.')
         else:
             target = Path(path)

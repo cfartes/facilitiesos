@@ -482,6 +482,7 @@ def register_operations(app, storage, actor, rate_limit):
     def message(company_id: UUID, order_id: UUID, data: MessageInput, user=Depends(actor)):
         company = scope(user, company_id); write(user)
         with storage.scoped(user, company) as db:
+            db.execute('BEGIN IMMEDIATE')
             row = get_order(db, user, company, order_id)
             if row['state'] in ('closed','cancelled'):
                 raise HTTPException(409, 'Reabra o atendimento para adicionar mensagens.')

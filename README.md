@@ -1,6 +1,6 @@
 # Nexus Facilities OS
 
-Fundação do Nexus Facilities OS, seguindo a identidade visual do Nexus RotaFY. Inclui empresas, usuários por convite, permissões por unidade, estrutura física, auditoria e configuração de OpenWA/Resend.
+Nexus Facilities OS para validação do piloto, seguindo a identidade visual do Nexus RotaFY. Inclui cadastros, ocorrências, ordens de serviço, permissões por unidade, auditoria e configuração de OpenWA/Resend.
 
 ## Recursos disponíveis
 
@@ -10,7 +10,19 @@ Fundação do Nexus Facilities OS, seguindo a identidade visual do Nexus RotaFY.
 - Estrutura: unidade → prédio → andar → ambiente, com criticidade e fuso horário herdado da unidade. Não permite referências entre empresas nem inativação de um local com filhos ativos. Alterar hierarquia e exclusão definitiva não fazem parte desta etapa.
 - Convite: link individual válido por 48 horas, de uso único, com token persistido somente por hash. O usuário define sua própria senha (mínimo 12 caracteres). O link é entregue ao administrador para compartilhamento; **não há envio automático de convites por e-mail nesta etapa**. Reemitir um convite invalida o anterior.
 - Alterações de acesso encerram as sessões do usuário. Suspensão da empresa bloqueia login e acesso aos seus registros, preservando o histórico. O último administrador ativo com acesso configurado não pode ser removido ou desativado.
-- Perfis acumuláveis: solicitante, técnico, supervisor, gestor, aprovador, auditor e administrador da empresa. Os fluxos operacionais de cada perfil serão habilitados nas próximas entregas. Fornecedores aguardam cadastro e vínculo organizacional próprios.
+- Perfis acumuláveis: solicitante, técnico, supervisor, gestor, aprovador, auditor e administrador da empresa. Fornecedores e aprovações financeiras aguardam seus fluxos próprios.
+
+### Operação do piloto
+
+- Categorias de serviço e ativos vinculados aos locais, com criticidade, situação e consulta ao histórico de ordens.
+- Ocorrência separada da ordem de serviço. O solicitante registra e acompanha seus relatos; a coordenação faz triagem por impacto × urgência e pode reunir relatos do mesmo local, categoria e ativo em uma ordem. Reenvios com o mesmo identificador de solicitação não duplicam ocorrências.
+- Atribuição a profissionais ativos e autorizados na unidade; execução, espera justificada, resolução com solução e evidência textual, confirmação ou contestação pelo próprio solicitante, encerramento e reabertura justificada. Não há conclusão automática. Encerrar sem todas as confirmações exige revisão justificada; contestações retomam a execução.
+- Mensagens compartilhadas, notas internas, linha do tempo e notificações individuais no aplicativo. Solicitantes não recebem notas internas nem os relatos de outros participantes. Técnicos consultam as ordens atribuídas; administradores e supervisores coordenam; gestores e auditores consultam no seu escopo. Auditor sem outro perfil não escreve.
+- O Superadmin pode validar a operação em desenvolvimento. Fora desse ambiente, o acesso operacional da plataforma fica bloqueado até existir autorização de suporte pela empresa.
+
+Prepare locais, categorias e usuários antes de registrar ocorrências. Acesse `/nexus/ocorrencias` e `/nexus/ordens` como Superadmin em desenvolvimento; clientes usam `/app/ocorrencias` e `/app/ordens`. Evidência nesta etapa é textual: anexos privados, calendário/SLA e recebimento pelo WhatsApp ainda não estão disponíveis.
+
+Limites de listagem: 500 categorias, 1.000 ativos, 500 ocorrências/ordens e 100 notificações. Detalhes exibem até 500 mensagens e eventos por ordem. Paginar antes de ampliar o piloto além desses limites; indicadores referem-se às ordens listadas.
 
 ## Executar no Windows
 
@@ -44,7 +56,7 @@ Cadastre a primeira empresa e seu administrador inicial, depois prepare a estrut
 
 ### Banco e migrações
 
-`python -m backend.dev_database` preserva o volume e as credenciais existentes. As migrações `0001` a `0003` são incrementais e podem ser reaplicadas, sem excluir dados. A `0003` acrescenta os campos cadastrais da empresa; dados que não existiam ficam em branco, sem inventar documentos, contatos ou endereços. Ao editar um cadastro anterior, complete os campos obrigatórios. Identificadores anteriores com hífen podem ser mantidos; novos identificadores e alterações usam de 2 a 50 letras minúsculas/números. Para um PostgreSQL externo, configure `FACILITIES_MIGRATION_DATABASE_URL`, `FACILITIES_DATABASE_URL` e `FACILITIES_PLATFORM_DATABASE_URL`; provisione os papéis seguindo `infra/init-db.sh` e execute `python -m backend.migrate` com a credencial proprietária.
+`python -m backend.dev_database` preserva o volume e as credenciais existentes. As migrações `0001` a `0004` são incrementais e podem ser reaplicadas, sem excluir dados. A `0004` acrescenta as tabelas operacionais e suas políticas RLS. A `0003` acrescenta os campos cadastrais da empresa; dados que não existiam ficam em branco, sem inventar documentos, contatos ou endereços. Ao editar um cadastro anterior, complete os campos obrigatórios. Identificadores anteriores com hífen podem ser mantidos; novos identificadores e alterações usam de 2 a 50 letras minúsculas/números. Para um PostgreSQL externo, configure `FACILITIES_MIGRATION_DATABASE_URL`, `FACILITIES_DATABASE_URL` e `FACILITIES_PLATFORM_DATABASE_URL`; provisione os papéis seguindo `infra/init-db.sh` e execute `python -m backend.migrate` com a credencial proprietária.
 
 As tabelas de configuração, autenticação, convites e limites são restritas ao papel da plataforma. Empresas, usuários, locais e auditoria têm RLS/FORCE RLS, com escopo de empresa por transação e restrições adicionais de unidade para locais e auditoria. Credenciais de conta ficam em tabela separada da listagem de usuários. A tabela `schema_versions` contém somente os identificadores de migração, sem dados privados.
 
@@ -63,7 +75,7 @@ Credenciais criptografadas com Fernet no servidor, sessão aleatória persistida
 
 O PostgreSQL local foi preparado para desenvolvimento e testes; isso não certifica a implantação em produção. Ambientes externos exigem PostgreSQL com RLS/FORCE RLS, papéis de runtime sem privilégios administrativos e origem HTTPS. TLS/proxy, backups, restauração, acesso de suporte, retenção e revisão dos textos legais ainda precisam ser preparados e validados antes de uso real. A credencial proprietária de migração não deve ficar no ambiente da API em produção.
 
-Ainda não implementado: ativos, ocorrências e ordens, SLA/calendários, fornecedores, contratos, aprovações financeiras, vínculo de sessões por empresa, recebimento de webhooks, filas operacionais, envio automático de convites, recuperação de senha, gestão de equipe Nexus, MFA e páginas legais. O envio Resend desta entrega é apenas o teste explícito. O guia OpenWA recebido documenta envio e consulta; não define o contrato de eventos recebidos. Não foram copiadas senhas ou chaves do documento original. O plano de continuidade está em `DESENVOLVIMENTO.md`.
+Ainda não implementado: anexos privados e verificação de arquivos, SLA/calendários, fornecedores, contratos, aprovações financeiras, vínculo de sessões por empresa, recebimento de webhooks, filas operacionais, envio automático de convites, recuperação de senha, gestão de equipe Nexus, MFA e páginas legais. O envio Resend desta entrega é apenas o teste explícito. O guia OpenWA recebido documenta envio e consulta; não define o contrato de eventos recebidos. Não foram copiadas senhas ou chaves do documento original. O plano de continuidade está em `DESENVOLVIMENTO.md`.
 
 ## Verificação
 

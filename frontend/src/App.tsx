@@ -30,6 +30,8 @@ import {
 import { api } from "./api";
 import { Foundation, type FoundationPage } from "./Foundation";
 import { AcceptInvitation } from "./Invitation";
+import { Operations } from "./Operations";
+import type { OperationPage } from "./operationTypes";
 import type { User } from "./types";
 
 type Configuration = {
@@ -737,23 +739,39 @@ export function App() {
       ["company_admin", "auditor", "manager"].includes(role),
     );
   const path = window.location.pathname;
-  const page: FoundationPage | "integrations" = path.endsWith("/empresas")
-    ? "companies"
-    : path.endsWith("/usuarios")
-      ? "users"
-      : path.endsWith("/locais")
-        ? "locations"
-        : path.endsWith("/auditoria")
-          ? "audit"
-          : isNexus
-            ? "integrations"
-            : "locations";
+  const operationPage = (
+    {
+      ativos: "assets",
+      categorias: "categories",
+      ocorrencias: "occurrences",
+      ordens: "orders",
+      notificacoes: "notifications",
+    } as Partial<Record<string, OperationPage>>
+  )[path.split("/").pop() ?? ""];
+  const page: FoundationPage | OperationPage | "integrations" =
+    operationPage ??
+    (path.endsWith("/empresas")
+      ? "companies"
+      : path.endsWith("/usuarios")
+        ? "users"
+        : path.endsWith("/locais")
+          ? "locations"
+          : path.endsWith("/auditoria")
+            ? "audit"
+            : isNexus
+              ? "integrations"
+              : "locations");
   const label = {
     companies: "Empresas",
     users: "Usuários e permissões",
     locations: "Estrutura física",
     audit: "Auditoria",
     integrations: "Integrações",
+    assets: "Ativos",
+    categories: "Categorias de serviço",
+    occurrences: "Ocorrências",
+    orders: "Ordens de serviço",
+    notifications: "Notificações",
   }[page];
   const base = isNexus ? "/nexus" : "/app";
   const allowed =
@@ -762,6 +780,35 @@ export function App() {
     (page !== "audit" || canAudit) &&
     (page !== "integrations" || isNexus);
   const navItems = [
+    {
+      key: "occurrences",
+      title: "Ocorrências",
+      href: base + "/ocorrencias",
+      icon: MessageCircle,
+    },
+    {
+      key: "orders",
+      title: "Ordens de serviço",
+      href: base + "/ordens",
+      icon: FileClock,
+    },
+    { key: "assets", title: "Ativos", href: base + "/ativos", icon: Building2 },
+    {
+      key: "categories",
+      title: "Categorias de serviço",
+      href: base + "/categorias",
+      icon: FolderTree,
+    },
+    ...(isNexus
+      ? []
+      : [
+          {
+            key: "notifications",
+            title: "Notificações",
+            href: base + "/notificacoes",
+            icon: Mail,
+          },
+        ]),
     ...(isNexus
       ? [
           {
@@ -888,8 +935,10 @@ export function App() {
             <Notice error>Seu perfil não permite acessar esta página.</Notice>
           ) : page === "integrations" ? (
             <Integrations />
+          ) : operationPage ? (
+            <Operations page={operationPage} user={user} />
           ) : (
-            <Foundation page={page} user={user} />
+            <Foundation page={page as FoundationPage} user={user} />
           )}
         </main>
         <footer className="app-footer">

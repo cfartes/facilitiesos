@@ -89,7 +89,7 @@ def apply_operation_policies(connection):
     conditions = {
         'service_categories': scope,
         'assets': unit_scope,
-        'occurrences': f"{unit_scope} AND ({manage} OR {review} OR requester_id={uid})",
+        'occurrences': f"{unit_scope} AND ({manage} OR {review} OR requester_id={uid} OR EXISTS(SELECT 1 FROM work_orders w WHERE w.id=occurrences.order_id AND w.company_id=occurrences.company_id AND w.assignee_id={uid}))",
         'work_orders': f'{unit_scope} AND {order_access}',
         'order_participants': f'{unit_scope} AND ({manage} OR {review} OR user_id={uid})',
         'order_messages': f"{unit_scope} AND {view_order} AND (visibility='shared' OR {internal})",
@@ -97,6 +97,8 @@ def apply_operation_policies(connection):
         'notifications': f'{unit_scope} AND user_id={uid}',
     }
     for table, condition in conditions.items():
+        if table in ('order_messages', 'order_events'):
+            condition = condition.replace('w.id=order_id', f'w.id={table}.order_id').replace('w.company_id=company_id', f'w.company_id={table}.company_id')
         connection.execute(text(f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY'))
         connection.execute(text(f'ALTER TABLE {table} FORCE ROW LEVEL SECURITY'))
         connection.execute(text(f'DROP POLICY IF EXISTS platform_access ON {table}'))
