@@ -1,0 +1,22 @@
+name: nexus-facilities
+services:
+  db:
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: facilities
+      POSTGRES_USER: facilities_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Execute python -m backend.dev_database}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Execute python -m backend.dev_database}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?Execute python -m backend.dev_database}
+    ports:
+      - "127.0.0.1:5452:5432"
+    volumes:
+      - facilities_data:/var/lib/postgresql/data
+      - ./infra/init-db.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U facilities_owner -d facilities"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+volumes:
+  facilities_data:
