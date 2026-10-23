@@ -229,7 +229,9 @@ def install(args):
     settings.update(routing, RELEASE=release)
     write_settings(path, settings)
     model = json.loads(compose(settings, 'config', '--format', 'json'))
-    if model['services']['api']['environment']['FACILITIES_ADMIN_PASSWORD_HASH'] != settings['FACILITIES_ADMIN_PASSWORD_HASH']:
+    # Compose escapa dólares no modelo exportado; isso não altera o valor no container.
+    exported_hash = model['services']['api']['environment']['FACILITIES_ADMIN_PASSWORD_HASH']
+    if exported_hash.replace('$$', '$') != settings['FACILITIES_ADMIN_PASSWORD_HASH']:
         raise ValueError('O Compose não preservou o hash da senha. Instalação interrompida.')
     print('Traefik: rede ' + routing['TRAEFIK_NETWORK'] + ', HTTPS ' + routing['TRAEFIK_HTTPS_ENTRYPOINT'] + ', TLS ' + routing['TRAEFIK_CERTRESOLVER'])
     print('Construindo imagens da versão ' + release + '...')

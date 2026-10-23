@@ -53,7 +53,7 @@ def test_traefik_detection_reuses_existing_network():
         install.detect_traefik(containers() + containers()[:1], arguments(), {})
 
 
-def simulated_docker(monkeypatch, tmp_path, has_volume=False):
+def simulated_docker(monkeypatch, tmp_path, has_volume=False, escaped_hash=False):
     monkeypatch.setattr(install, 'ROOT', tmp_path)
     monkeypatch.setattr(install.sys, 'platform', 'linux')
     monkeypatch.setattr(install.shutil, 'which', lambda name: name)
@@ -76,7 +76,10 @@ def simulated_docker(monkeypatch, tmp_path, has_volume=False):
         if args[-2:] == ['up', '--help']:
             return '--wait --wait-timeout'
         if args[-3:] == ['config', '--format', 'json']:
-            return json.dumps({'services': {'api': {'environment': {'FACILITIES_ADMIN_PASSWORD_HASH': settings['FACILITIES_ADMIN_PASSWORD_HASH']}}}})
+            value = settings['FACILITIES_ADMIN_PASSWORD_HASH']
+            if escaped_hash:
+                value = value.replace('$', '$$')
+            return json.dumps({'services': {'api': {'environment': {'FACILITIES_ADMIN_PASSWORD_HASH': value}}}})
         return ''
     monkeypatch.setattr(install, 'run', run)
     monkeypatch.setattr(install, 'backup', lambda settings, include_database: backups.append(include_database))
@@ -88,8 +91,9 @@ def simulated_docker(monkeypatch, tmp_path, has_volume=False):
     return calls, backups
 
 
-def test_install_then_upgrade_preserves_keys_and_credentials(monkeypatch, tmp_path):
-    calls, _ = simulated_docker(monkeypatch, tmp_path)
+@pytest.mark.parametrize('escaped_hash', [False, True])
+def test_install_then_upgrade_preserves_keys_and_credentials(monkeypatch, tmp_path, escaped_hash):
+    calls, _ = simulated_docker(monkeypatch, tmp_path, escaped_hash=escaped_hash)
     install.install(arguments())
     path = tmp_path / '.env.production'
     original = install.read_settings(path)
@@ -97,7 +101,7 @@ def test_install_then_upgrade_preserves_keys_and_credentials(monkeypatch, tmp_pa
     migration = next(index for index, cmd in enumerate(calls) if 'migrate' in cmd)
     api_up = next(index for index, cmd in enumerate(calls) if cmd[-2:] == ['api', 'web'] and 'up' in cmd)
     assert migration < api_up
-    calls, backups = simulated_docker(monkeypatch, tmp_path, has_volume=True)
+    calls, backups = simulated_docker(monkeypatch, tmp_path, has_volume=True, escaped_hash=escaped_hash)
     monkeypatch.setattr(install.getpass, 'getpass', lambda _: pytest.fail('Credenciais não devem ser solicitadas novamente.'))
     install.install(arguments())
     assert install.read_settings(path) == original
