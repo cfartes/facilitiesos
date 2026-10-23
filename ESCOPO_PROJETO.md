@@ -89,6 +89,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 
 - Frontend React/TypeScript e backend FastAPI, com identidade visual baseada no RotaFY.
 - Navegação para Superadmin e usuários das empresas, com interface responsiva.
+- Login seguindo o visual do RotaFY, com painel institucional, formulário, visibilidade de senha e alternância entre portal da empresa e Administração Nexus; versão compacta para celular.
 - Cadastro, edição e suspensão de empresas.
 - Campos da empresa: nome comercial, razão social, identificador de acesso, CPF/CNPJ, telefone/WhatsApp, CEP, endereço, número, complemento opcional, bairro, cidade, UF e perfil operacional.
 - Perfis operacionais da empresa: escritório, indústria, logística e uso misto.
@@ -339,7 +340,7 @@ Decisões operacionais ainda necessárias: cliente/unidade piloto, categorias in
 
 A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de e-mails de acesso](backend/email_outbox.py), [recuperação de senha](backend/password_reset.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
 
-As verificações registraram suíte de API em SQLite/PostgreSQL, build e 43 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, complementos privados, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
+As verificações registraram suíte de API em SQLite/PostgreSQL, build e 45 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, complementos privados, privacidade de fotos e acessibilidade em desktop/celular. O login também foi verificado por teclado, Axe e revisão visual em 1440/390 px. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
 
 O ambiente local de validação é [Nexus Facilities OS dev](http://127.0.0.1:5180/nexus/empresas), quando os serviços locais estiverem em execução. Não há implantação externa de produção documentada como concluída.
 

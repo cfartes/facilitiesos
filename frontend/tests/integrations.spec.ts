@@ -238,7 +238,7 @@ test("login e logout sem armazenar credenciais no navegador", async ({
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
   await page.getByRole("button", { name: "Sair da conta" }).click();
   await expect(
-    page.getByRole("heading", { name: "Acesse o Facilities OS" }),
+    page.getByRole("heading", { name: "Bem-vindo de volta" }),
   ).toBeVisible();
   expect(loggedIn).toBe(false);
 });

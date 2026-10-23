@@ -182,6 +182,7 @@ test("recuperação com API real e caixa de e-mail sintética, sem entrega exter
     page.getByText("Configurações salvas com sucesso."),
   ).toBeVisible();
   await page.getByRole("button", { name: "Sair da conta" }).click();
+  await page.getByRole("link", { name: "Acessar portal da empresa" }).click();
   await page.getByRole("link", { name: "Esqueci minha senha" }).click();
   await page.getByLabel("E-mail do acesso").fill(email);
   await page

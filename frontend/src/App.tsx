@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ArrowRight,
   Building2,
   Cable,
   Check,
@@ -146,6 +147,8 @@ function Notice({
 }
 
 function Login({ onLogin }: { onLogin: (user: User) => void }) {
+  const isNexus = window.location.pathname.startsWith("/nexus");
+  const [visible, setVisible] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -164,75 +167,135 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     }
   }
   return (
-    <div className="login-layout">
-      <aside className="login-story">
+    <main className="login-layout">
+      <section className="login-story" aria-label="Nexus Facilities OS">
         <Brand light />
-        <div>
-          <span className="eyebrow">NEXUS FACILITIES OS</span>
-          <h1>
-            Conecte a operação.
-            <br />
-            <em>Cuide de cada detalhe.</em>
-          </h1>
-          <p>O ponto de encontro entre ambientes, equipes e soluções.</p>
-        </div>
-        <span className="login-footer">
-          <ShieldCheck size={18} /> Ambientes, pessoas e operação
-        </span>
-      </aside>
-      <main className="login-main">
-        <form className="login-form" onSubmit={submit}>
-          <span className="small-icon">
-            <ShieldCheck size={24} />
+        <div className="story-body">
+          <span className="eyebrow">
+            <span className="live-dot" /> CADA AMBIENTE, BEM CUIDADO
           </span>
-          <span className="eyebrow">ACESSO À PLATAFORMA</span>
-          <h2>Acesse o Facilities OS</h2>
-          <p className="muted">Entre com o acesso concedido à sua conta.</p>
-          <div className="field">
-            <label htmlFor="email">E-mail</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              maxLength={254}
-              disabled={busy}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="password">Senha</label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              maxLength={1024}
-              disabled={busy}
-            />
-          </div>
-          {error && <Notice error>{error}</Notice>}
-          <button className="button primary full" disabled={busy}>
-            {busy ? (
-              <LoaderCircle className="spin" size={18} />
-            ) : (
-              <ShieldCheck size={18} />
-            )}
-            {busy ? "Entrando…" : "Entrar"}
-          </button>
-          <p className="login-note">
-            <a href="/recuperar-senha">Esqueci minha senha</a>
+          <h2>
+            Uma operação
+            <br />
+            mais tranquila.
+            <br />
+            <em>Em cada ambiente.</em>
+          </h2>
+          <p>
+            Seus ambientes, suas equipes e seus atendimentos no mesmo lugar.
           </p>
-          <p className="login-note">
-            Primeiro acesso? Utilize o link enviado pelo administrador da sua
-            empresa.
+          <div className="facilities-illustration" aria-hidden="true">
+            <div className="facility-node">
+              <Building2 size={22} />
+              <span>Sua empresa</span>
+            </div>
+            <div className="facility-line">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="facility-node destination">
+              <ShieldCheck size={22} />
+              <span>Ambientes bem cuidados</span>
+            </div>
+          </div>
+        </div>
+        <footer>
+          Nexus Facilities OS <span>Gestão que cuida de cada detalhe.</span>
+        </footer>
+      </section>
+      <section className="login-main" aria-labelledby="login-title">
+        <div className="mobile-logo">
+          <Brand />
+        </div>
+        <div className="login-form">
+          <span className="eyebrow">
+            {isNexus ? "ADMINISTRAÇÃO DA PLATAFORMA" : "PORTAL DA EMPRESA"}
+          </span>
+          <h1 id="login-title">Bem-vindo de volta</h1>
+          <p className="muted">
+            {isNexus
+              ? "Entre para administrar as empresas da Nexus."
+              : "Entre para acessar o espaço da sua empresa."}
           </p>
-        </form>
-      </main>
-    </div>
+          <form onSubmit={submit}>
+            <p className="login-data-notice">
+              <ShieldCheck size={16} aria-hidden="true" />
+              Utilize seu acesso individual. As ações administrativas ficam
+              registradas para auditoria.
+            </p>
+            <div className="field">
+              <label htmlFor="email">E-mail</label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="username"
+                placeholder="voce@empresa.com.br"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                maxLength={254}
+                disabled={busy}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="password">Senha</label>
+              <div className="secret-input">
+                <input
+                  id="password"
+                  type={visible ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  maxLength={1024}
+                  disabled={busy}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  disabled={busy}
+                  aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+                  aria-pressed={visible}
+                  onClick={() => setVisible(!visible)}
+                >
+                  {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            {error && <Notice error>{error}</Notice>}
+            <button className="button primary full" disabled={busy}>
+              {busy ? "Entrando…" : "Entrar"}
+              {busy ? (
+                <LoaderCircle className="spin" size={18} aria-hidden="true" />
+              ) : (
+                <ArrowRight size={18} aria-hidden="true" />
+              )}
+            </button>
+          </form>
+          {!isNexus && (
+            <a className="login-help" href="/recuperar-senha">
+              <KeyRound size={15} aria-hidden="true" />
+              Esqueci minha senha
+            </a>
+          )}
+          <p className="login-note">
+            {isNexus
+              ? "Acesso exclusivo à administração da plataforma. Para recuperar este acesso, contate o responsável pela instalação."
+              : "Primeiro acesso? Utilize o link enviado pelo administrador da sua empresa."}
+          </p>
+          <a className="portal-link" href={isNexus ? "/" : "/nexus"}>
+            {isNexus ? "Acessar portal da empresa" : "Administração Nexus"}
+            <ChevronRight size={15} aria-hidden="true" />
+          </a>
+        </div>
+        <footer className="login-footer">
+          <ShieldCheck size={16} aria-hidden="true" />
+          Acesso exclusivo à sua operação
+        </footer>
+      </section>
+    </main>
   );
 }
 

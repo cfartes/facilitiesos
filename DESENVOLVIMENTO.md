@@ -7,6 +7,7 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
+- Login no modelo visual do RotaFY: painel institucional, formulário com alternância de visibilidade da senha, versões de empresa/Nexus e apresentação compacta no celular. Autenticação e permissões existentes preservadas; redefinição web continua exclusiva das contas das empresas.
 - PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0009` e RLS/FORCE RLS nas 22 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Superadmin restrito a empresas, integrações e auditoria, com bloqueio operacional também na API. Administrador do cliente gerencia estrutura, usuários e operação; dispõe do menu WhatsApp para iniciar a sessão exclusiva da empresa e ler o QR Code temporário.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.

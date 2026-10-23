@@ -734,69 +734,182 @@ input[type="checkbox"] {
   background:
     radial-gradient(ellipse at 75% 70%, #164b5a 0, transparent 60%), #0a2540;
   color: white;
-  padding: 45px 12%;
+  padding: 46px 10%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 70px;
+}
+.story-body {
+  margin: auto 0;
+  padding: 28px 0;
 }
 .login-story .eyebrow {
-  color: #74d9c9;
-  font-size: 10px;
+  color: #c2dedf;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
-.login-story h1 {
-  font-size: clamp(25px, 3vw, 42px);
-  line-height: 1.35;
-  letter-spacing: -1.2px;
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5ddac8;
+}
+.login-story h2 {
+  margin-top: 24px;
+  font-size: clamp(32px, 3.4vw, 54px);
+  line-height: 1.17;
+  letter-spacing: -1.8px;
   font-weight: 600;
 }
 .login-story em {
-  color: #74d9c9;
+  color: #64d5c7;
   font-style: normal;
 }
 .login-story p {
-  font-size: 14px;
-  line-height: 1.9;
-  color: #c2dedf;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #b8ccda;
   margin-top: 24px;
-  max-width: 340px;
+  max-width: 320px;
 }
-.login-footer {
+.facilities-illustration {
   display: flex;
-  gap: 9px;
+  align-items: flex-start;
+  margin-top: 55px;
+  max-width: 360px;
+}
+.facility-node {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  font-size: 12px;
-  color: #c2dedf;
+  gap: 12px;
+  color: #c2dae4;
+}
+.facility-node > svg {
+  box-sizing: content-box;
+  padding: 15px;
+  background: #ffffff0c;
+  border: 1px solid #ffffff21;
+  border-radius: 14px;
+}
+.facility-node span {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.facility-node.destination {
+  color: #66ddcb;
+}
+.facility-node.destination > svg {
+  background: #14b8a612;
+  border-color: #45bfa956;
+}
+.facility-line {
+  margin: 26px 14px 0;
+  height: 1px;
+  border-top: 1px dashed #78a1ac;
+  display: flex;
+  flex: 1;
+  justify-content: space-around;
+  min-width: 36px;
+}
+.facility-line span {
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  background: #63baa9;
+  border-radius: 50%;
+}
+.login-story footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  font-size: 10px;
+  color: #c4d5e0;
+}
+.login-story footer span {
+  color: #a5bcc8;
 }
 .login-main {
-  display: grid;
-  place-items: center;
-  padding: 45px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
 }
 .login-form {
-  max-width: 370px;
+  max-width: 460px;
   width: 100%;
 }
-.login-form > .small-icon {
-  margin-bottom: 25px;
+.login-form .eyebrow {
+  margin-bottom: 4px;
 }
-.login-form h2 {
-  font-size: 27px;
-  letter-spacing: -0.7px;
-  margin-bottom: 10px;
+.login-form h1 {
+  font-size: 30px;
+  letter-spacing: -1.2px;
+  font-weight: 650;
+  margin-bottom: 4px;
 }
-.login-form > .muted {
-  margin-bottom: 30px;
+.login-form form {
+  margin-top: 16px;
+}
+.login-data-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #f0f7f7;
+  color: #45616f;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.login-data-notice svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.login-form .field {
+  margin-bottom: 12px;
+}
+.login-help {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  min-height: 32px;
+  color: #486575;
+  font-size: 12px;
 }
 .login-note {
-  margin-top: 22px;
+  margin-top: 12px;
   font-size: 11px;
   line-height: 1.7;
   color: #52697b;
-  text-align: center;
 }
-.login-form .field {
-  margin-bottom: 20px;
+.portal-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e9eef2;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3c5f73;
+  min-height: 44px;
+}
+.login-footer {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 11px;
+  color: #52697b;
+  margin-top: 24px;
+}
+.mobile-logo {
+  display: none;
 }
 @media (min-width: 1500px) {
   .content {
@@ -979,15 +1092,18 @@ input[type="checkbox"] {
     display: block;
   }
   .login-story {
-    padding: 26px;
-    gap: 35px;
+    display: none;
   }
-  .login-story > div:not(.brand),
-  .login-footer {
+  .login-story > div:not(.brand) {
     display: none;
   }
   .login-main {
-    padding: 38px 25px;
+    min-height: 100dvh;
+    padding: 30px 20px;
+  }
+  .mobile-logo {
+    display: block;
+    margin: 0 0 32px;
   }
   .login-form {
     max-width: 400px;
