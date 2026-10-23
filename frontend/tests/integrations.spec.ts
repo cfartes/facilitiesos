@@ -7,6 +7,7 @@ async function mockApi(page: Page, configured = false) {
     openwa_base_url: "https://openwa.187-77-58-10.sslip.io/api",
     openwa_key_configured: configured,
     resend_key_configured: configured,
+    invitation_email_enabled: false,
     email_from: configured ? "sender@example.com" : "",
     updated_at: null as string | null,
   };
@@ -39,6 +40,8 @@ async function mockApi(page: Page, configured = false) {
           version: config.version + 1,
           updated_at: "2026-10-23T12:00:00Z",
           email_from: data.email_from ?? config.email_from,
+          invitation_email_enabled:
+            !!data.invitation_email_enabled && !data.clear_resend_key,
           openwa_key_configured: data.clear_openwa_key
             ? false
             : !!data.openwa_api_key || config.openwa_key_configured,
@@ -112,6 +115,29 @@ test("remoção é explícita e só ocorre após salvar", async ({ page }) => {
   await expect(page.getByText("Chave cadastrada", { exact: true })).toHaveCount(
     1,
   );
+});
+
+test("habilitação de convites é salva e remover a chave a desativa", async ({
+  page,
+}) => {
+  await mockApi(page, true);
+  await page.goto("/nexus/configuracoes/integracoes");
+  const choice = page.getByLabel("Habilitar envio de convites por e-mail");
+  await expect(choice).not.toBeChecked();
+  await choice.check();
+  await page.getByRole("button", { name: "Salvar configurações" }).click();
+  await expect(
+    page.getByText("Configurações salvas com sucesso."),
+  ).toBeVisible();
+  await expect(choice).toBeChecked();
+  await page.getByLabel("Remover a chave Resend ao salvar").check();
+  await expect(choice).not.toBeChecked();
+  await expect(choice).toBeDisabled();
+  await page.getByRole("button", { name: "Salvar configurações" }).click();
+  await expect(
+    page.getByText("Configurações salvas com sucesso."),
+  ).toBeVisible();
+  await expect(choice).not.toBeChecked();
 });
 
 test("erro de concorrência preserva alterações para revisão", async ({

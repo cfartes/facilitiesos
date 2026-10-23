@@ -52,5 +52,15 @@ export type Member = {
   is_active: boolean;
   version: number;
   invitation_pending: boolean;
+  invitation_email?: {
+    status: string;
+    attempts: number;
+    last_error: string;
+    updated_at: string;
+  } | null;
 };
-export type Invitation = { url: string; expires_in_hours: number };
+export type Invitation = {
+  url: string;
+  expires_in_hours: number;
+  email_queued?: boolean;
+};

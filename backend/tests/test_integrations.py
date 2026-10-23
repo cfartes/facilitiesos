@@ -20,7 +20,7 @@ RESEND_KEY = 're_test_secret_not_real'
 def setup(tmp_path):
     path = tmp_path / 'test.db'
     key = Fernet.generate_key()
-    app = create_app(path, 'admin@example.com', password_hash(PASSWORD), key, ORIGIN)
+    app = create_app(path, 'admin@example.com', password_hash(PASSWORD), key, ORIGIN, start_email_worker=False)
     with TestClient(app, base_url=ORIGIN, headers={'Origin': ORIGIN}) as client:
         yield client, path, key
 

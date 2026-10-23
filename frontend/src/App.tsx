@@ -40,6 +40,7 @@ type Configuration = {
   openwa_key_configured: boolean;
   resend_key_configured: boolean;
   email_from: string;
+  invitation_email_enabled?: boolean;
   updated_at: string | null;
 };
 type Session = { id: string; name: string; status: string };
@@ -235,6 +236,7 @@ function Integrations() {
   const [openwa, setOpenwa] = useState("");
   const [resend, setResend] = useState("");
   const [sender, setSender] = useState("");
+  const [invitationEmailEnabled, setInvitationEmailEnabled] = useState(false);
   const [removeOpenwa, setRemoveOpenwa] = useState(false);
   const [removeResend, setRemoveResend] = useState(false);
   const [recipient, setRecipient] = useState("");
@@ -252,7 +254,8 @@ function Integrations() {
       !!resend ||
       removeOpenwa ||
       removeResend ||
-      sender !== config.email_from);
+      sender !== config.email_from ||
+      invitationEmailEnabled !== !!config.invitation_email_enabled);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -269,6 +272,7 @@ function Integrations() {
       const result = await api<Configuration>("/nexus/integrations");
       setConfig(result);
       setSender(result.email_from);
+      setInvitationEmailEnabled(!!result.invitation_email_enabled);
       setOpenwa("");
       setResend("");
       setRemoveOpenwa(false);
@@ -304,9 +308,11 @@ function Integrations() {
         email_from: sender || undefined,
         clear_openwa_key: removeOpenwa,
         clear_resend_key: removeResend,
+        invitation_email_enabled: invitationEmailEnabled,
       });
       setConfig(result);
       setSender(result.email_from);
+      setInvitationEmailEnabled(!!result.invitation_email_enabled);
       setOpenwa("");
       setResend("");
       setRemoveOpenwa(false);
@@ -559,6 +565,27 @@ function Integrations() {
                       Resend.
                     </small>
                   </div>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={invitationEmailEnabled}
+                      disabled={
+                        removeResend ||
+                        (!resend && !config.resend_key_configured)
+                      }
+                      onChange={(event) => {
+                        setInvitationEmailEnabled(event.target.checked);
+                        changed();
+                      }}
+                    />
+                    Habilitar envio de convites por e-mail
+                  </label>
+                  <p className="form-help">
+                    Após habilitar, os administradores poderão solicitar o envio
+                    ao gerar um convite. Envios já solicitados e ainda válidos
+                    também serão retomados. Desabilitar pausa novos envios; não
+                    recolhe mensagens já enviadas ou em andamento.
+                  </p>
                   {config.resend_key_configured && (
                     <label className="checkbox danger">
                       <input
@@ -566,6 +593,8 @@ function Integrations() {
                         checked={removeResend}
                         onChange={(e) => {
                           setRemoveResend(e.target.checked);
+                          if (e.target.checked)
+                            setInvitationEmailEnabled(false);
                           setResend("");
                           changed();
                         }}

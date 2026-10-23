@@ -6,7 +6,8 @@ versions = Table('schema_versions', metadata, Column('version', String(20), prim
 configuration = Table('configuration', metadata,
     Column('id', Integer, primary_key=True), Column('version', Integer, nullable=False, server_default='0'),
     Column('openwa_key', Text, nullable=False, server_default=''), Column('resend_key', Text, nullable=False, server_default=''),
-    Column('email_from', Text, nullable=False, server_default=''), Column('updated_at', Text))
+    Column('email_from', Text, nullable=False, server_default=''), Column('updated_at', Text),
+    Column('invitation_email_enabled', Integer, nullable=False, server_default='0'))
 sessions = Table('sessions', metadata,
     Column('token_hash', Text, primary_key=True), Column('csrf_hash', Text, nullable=False),
     Column('email', Text, nullable=False), Column('role', Text, nullable=False), Column('expires', Float, nullable=False),
@@ -45,6 +46,18 @@ invitations = Table('invitations', metadata,
     Column('token_hash', Text, primary_key=True), Column('user_id', String(36), ForeignKey('users.id'), nullable=False),
     Column('expires', Float, nullable=False), Column('used_at', Text))
 Index('uq_locations_company_unit_id', locations.c.company_id, locations.c.unit_id, locations.c.id, unique=True)
+email_outbox = Table('email_outbox', metadata,
+    Column('id', String(36), primary_key=True), Column('company_id', String(36), nullable=False),
+    Column('user_id', String(36), nullable=False), Column('invitation_hash', String(64), nullable=False, unique=True),
+    Column('payload', Text, nullable=False), Column('credential_hash', String(64), nullable=False),
+    Column('status', String(20), nullable=False), Column('attempts', Integer, nullable=False, server_default='0'),
+    Column('expires', Float, nullable=False), Column('next_attempt_at', Float, nullable=False),
+    Column('first_attempt_at', Float), Column('lease', String(36)), Column('lease_until', Float),
+    Column('last_error', String(300), nullable=False, server_default=''), Column('provider_id', String(200)),
+    Column('created_at', Text, nullable=False), Column('updated_at', Text, nullable=False),
+    ForeignKeyConstraint(['company_id','user_id'], ['users.company_id','users.id']))
+Index('ix_email_outbox_due', email_outbox.c.status, email_outbox.c.next_attempt_at)
+Index('ix_email_outbox_user', email_outbox.c.company_id, email_outbox.c.user_id, email_outbox.c.created_at)
 Index('uq_users_company_id', users.c.company_id, users.c.id, unique=True)
 from backend.operation_schema import register_tables, apply_operation_policies
 register_tables(metadata)
@@ -61,6 +74,8 @@ def migrate_schema(engine):
                 for index in table.indexes:
                     index.create(connection, checkfirst=True)
         metadata.create_all(connection)
+        if 'invitation_email_enabled' not in {item['name'] for item in inspect(connection).get_columns('configuration')}:
+            connection.execute(text('ALTER TABLE configuration ADD COLUMN invitation_email_enabled INTEGER NOT NULL DEFAULT 0'))
         columns = {item['name'] for item in inspect(connection).get_columns('audit')}
         for name in ('company_id', 'unit_id', 'entity_id'):
             if name not in columns:
@@ -74,7 +89,7 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004', '0005'):
+        for version in ('0001', '0002', '0003', '0004', '0005', '0006'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)
@@ -83,7 +98,7 @@ def migrate_schema(engine):
 
 def apply_policies(connection):
     connection.execute(text('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
-    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations')
+    platform_tables = ('configuration','sessions','rate_limits','auth_accounts','invitations','email_outbox')
     tenant_tables = ('companies','users','locations','audit')
     connection.execute(text('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC'))
     connection.execute(text('GRANT USAGE ON SCHEMA public TO facilities_app,facilities_platform'))

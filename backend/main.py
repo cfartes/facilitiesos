@@ -1,5 +1,6 @@
 """API da fundação Nexus: identidade, integrações e administração de empresas."""
 import hmac
+import asyncio
 import os
 import secrets
 import time
@@ -40,6 +41,7 @@ class Configuration(Input):
     email_from: EmailStr | None = None
     clear_openwa_key: bool = False
     clear_resend_key: bool = False
+    invitation_email_enabled: bool | None = Field(default=None, strict=True)
 
     @model_validator(mode='after')
     def check_keys(self):
@@ -56,7 +58,7 @@ class EmailTest(Input):
     recipient: EmailStr
 
 
-def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=None, origin=None):
+def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=None, origin=None, start_email_worker=True):
     platform_url = os.getenv('FACILITIES_PLATFORM_DATABASE_URL') if database is None else None
     tenant_url = os.getenv('FACILITIES_DATABASE_URL') if database is None else None
     environment = os.getenv('FACILITIES_ENV', 'development')
@@ -77,16 +79,24 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
 
     storage = Database(db_path, platform_url, tenant_url)
     connect = storage.connect
+    from backend.email_outbox import EmailOutbox
+    outbox = EmailOutbox(storage, cipher, allowed_origin)
 
     @asynccontextmanager
     async def lifespan(app):
+        stop = asyncio.Event()
+        worker = asyncio.create_task(outbox.run(stop)) if start_email_worker else None
         try:
             yield
         finally:
+            stop.set()
+            if worker:
+                await worker
             storage.dispose()
 
     app = FastAPI(title='Nexus Facilities OS', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.storage = storage
+    app.state.email_outbox = outbox
 
     @app.get('/api/v1/health')
     def health():
@@ -191,6 +201,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     def public(row):
         return {'version': row['version'], 'openwa_base_url': providers.OPENWA_BASE,
                 'openwa_key_configured': bool(row['openwa_key']), 'resend_key_configured': bool(row['resend_key']),
+                'invitation_email_enabled': bool(row['invitation_email_enabled']),
                 'email_from': row['email_from'], 'updated_at': row['updated_at']}
 
     def decrypt(value):
@@ -266,9 +277,17 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
                 row['email_from'] = str(data.email_from)
             if row['resend_key'] and not row['email_from']:
                 raise HTTPException(422, 'Informe o e-mail remetente para configurar o Resend.')
+            if data.invitation_email_enabled is not None:
+                row['invitation_email_enabled'] = int(data.invitation_email_enabled)
+            if data.invitation_email_enabled and not (row['resend_key'] and row['email_from']):
+                raise HTTPException(422, 'Configure chave e remetente antes de habilitar convites por e-mail.')
+            if not row['resend_key']:
+                row['invitation_email_enabled'] = 0
+            if row['invitation_email_enabled'] and not row['email_from']:
+                raise HTTPException(422, 'Configure chave e remetente antes de habilitar convites por e-mail.')
             row['version'] += 1
             row['updated_at'] = datetime.now(timezone.utc).isoformat()
-            db.execute('UPDATE configuration SET version=:version,openwa_key=:openwa_key,resend_key=:resend_key,email_from=:email_from,updated_at=:updated_at WHERE id=1', row)
+            db.execute('UPDATE configuration SET version=:version,openwa_key=:openwa_key,resend_key=:resend_key,email_from=:email_from,invitation_email_enabled=:invitation_email_enabled,updated_at=:updated_at WHERE id=1', row)
             audit(db, user['email'], 'integrations.updated')
             return public(row)
 
@@ -293,7 +312,7 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         return providers.resend_test(key, sender, str(data.recipient))
 
     from backend.foundation import register_foundation
-    register_foundation(app, storage, actor, superadmin, rate_limit, allowed_origin, email)
+    register_foundation(app, storage, actor, superadmin, rate_limit, allowed_origin, email, outbox)
     from backend.operations import register_operations
     register_operations(app, storage, actor, rate_limit, cipher)
     return app

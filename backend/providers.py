@@ -61,3 +61,34 @@ def resend_test(key: str, sender: str, recipient: str):
     if not isinstance(data, dict) or not isinstance(data.get('id'), str):
         raise HTTPException(502, 'O Resend retornou uma resposta não reconhecida. Verifique o recebimento antes de repetir.')
     return {'message': 'Envio aceito pelo Resend. Confira a caixa de entrada e o spam; o aceite não confirma a entrega.'}
+
+
+class InvitationSendError(Exception):
+    def __init__(self, message, retryable=False, retry_after=0):
+        super().__init__(message)
+        self.retryable = retryable
+        self.retry_after = retry_after
+
+
+def resend_invitation(key, payload, idempotency_key):
+    request = Request(RESEND_BASE + '/emails', data=json.dumps(payload).encode(), method='POST', headers={
+        'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json',
+        'User-Agent': 'NexusFacilitiesOS/0.1', 'Idempotency-Key': idempotency_key,
+    })
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=15) as response:
+            raw = response.read(100_001)
+            if len(raw) > 100_000:
+                raise ValueError('response limit')
+            data = json.loads(raw)
+            if not isinstance(data, dict) or not isinstance(data.get('id'), str) or not 1 <= len(data['id']) <= 200:
+                raise ValueError('invalid response')
+            return data['id']
+    except HTTPError as error:
+        retryable = error.code in (408, 409, 429) or error.code >= 500
+        wait = error.headers.get('Retry-After', '') if error.headers else ''
+        wait = min(int(wait), 3600) if wait.isascii() and wait.isdigit() and len(wait) <= 8 else 0
+        raise InvitationSendError('Falha temporária no provedor; haverá nova tentativa.' if retryable else
+                                  'Envio recusado pelo provedor. Confira chave, remetente e destinatário antes de gerar novo convite.', retryable, wait) from None
+    except (URLError, TimeoutError, OSError, ValueError):
+        raise InvitationSendError('Resposta do provedor não confirmada; nova tentativa usará a mesma chave de envio.', True) from None

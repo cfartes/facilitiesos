@@ -2,7 +2,7 @@
 
 **Atualização:** 23/10/2026 — horário de Brasília.
 
-**Referência do código analisado:** `a3bb657`, branch `feat/foundation`.
+**Referência do código analisado:** branch `feat/foundation`, migrações até `0006`.
 
 **Repositório:** [cfartes/facilitiesos](https://github.com/cfartes/facilitiesos).
 
@@ -67,10 +67,10 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | Portal do solicitante | Relatar problema, anexar evidência, acompanhar, complementar e confirmar/contestar | Parcial: fluxo principal entregue; complementar texto antes da vinculação à OS precisa ser tratado | Fase 1 |
 | Triagem | Impacto, urgência, encaminhamento e reunião de relatos sobre um problema | Implementado manualmente | Fase 1; sugestões de duplicidade por IA na fase 3 |
 | Ordens de serviço | Lista/quadro, filtros, atribuição, atividades, checklist, mensagens, anexos, orçamento e histórico | Parcial: fluxo de atendimento entregue; checklist, filtros completos e orçamento pendentes | Fase 1 para operação; fase 2 para orçamento, prazo e fornecedor |
-| Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo entregue; envio externo e fila pendentes | Fase 1 |
+| Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo e fila de convites entregues; demais mensagens externas pendentes | Fase 1 |
 | Evidências | Texto, fotos e documentos privados conforme necessidade e autorização | Parcial: texto e fotos JPEG/PNG entregues; documentos gerais pendentes | Fase 1 para fotos; documentos após definição e validação próprias |
 | WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: chave e consulta de sessões entregues; fluxo operacional não implementado | Fase 1, condicionado à homologação do provedor |
-| E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: chave, remetente e envio de teste entregues | Fase 1 |
+| E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: configuração, teste, convites opcionais, fila e retentativas entregues; demais mensagens e confirmação de entrega pendentes | Fase 1 |
 | Equipes e fornecedores | Equipes próprias, organizações prestadoras, cobertura e acesso restrito | Pendente; usuários técnicos individuais já existem | Fase 2 |
 | Contratos de serviço | Vigência, escopo, anexos, cobertura, metas, limites e vencimentos | Pendente | Fase 2 |
 | Calendários e SLA | Metas de resposta/resolução, horários úteis, feriados e pausas autorizadas | Pendente; fuso e registros iniciais de tempo já existem | Fase 2 |
@@ -100,7 +100,9 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 
 - Login e logout por sessão em cookie; credenciais protegidas no servidor.
 - Convite de uso único, válido por 48 horas, para o usuário definir a própria senha.
-- Reemissão de convite com invalidação do anterior; compartilhamento atual por link manual.
+- Reemissão de convite com invalidação do anterior; compartilhamento manual ou envio opcional por Resend, habilitado pelo Superadmin.
+- Usuário/convite e envio gravados na mesma transação, com corpo criptografado enquanto pendente, no máximo cinco tentativas e chave de idempotência estável dentro da janela segura.
+- Cancelamento de envios pendentes por substituição, uso, expiração ou suspensão; consulta do último resultado por usuário, sem expor o token da fila. Aceite do provedor não confirma entrega.
 - Perfis acumuláveis: solicitante, técnico, supervisor, gestor, aprovador, auditor e administrador da empresa.
 - Acesso à própria empresa, com todas as unidades ou apenas unidades concedidas.
 - Revogação de sessões ao alterar acessos ou suspender a empresa.
@@ -169,18 +171,18 @@ Limites atuais de imagens: **200 MiB de conteúdo normalizado por empresa**, dez
 | Integração | Disponível hoje | Ainda não disponível |
 | --- | --- | --- |
 | OpenWA | Chave no Superadmin, armazenamento criptografado, substituição/remoção e consulta de sessões | Pareamento dentro do app, vínculo exclusivo por empresa, entrada de mensagens, abertura guiada de ocorrências e envio de atualizações |
-| Resend | Chave, remetente, armazenamento criptografado e envio explícito de e-mail de teste | Convites automáticos, fila, retentativas, mensagens operacionais e acompanhamento de entrega/falha |
+| Resend | Chave, remetente, teste explícito, habilitação do envio de convites, fila transacional, retentativas limitadas e resultado do último envio por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
 | ViaCEP | Consulta de endereço pelo backend com preenchimento manual alternativo | Não é integração operacional de atendimento |
 
 Chave cadastrada não comprova conexão ativa. Aceite de e-mail pelo provedor não comprova entrega. O guia OpenWA recebido documenta envio/consulta, mas não define o contrato de webhooks necessário ao recebimento.
 
 ### 5.8. Segurança e estrutura técnica
 
-- PostgreSQL local isolado, com migrações incrementais até `0005` e preservação dos dados existentes.
-- RLS/FORCE RLS nas dezoito tabelas privadas; metadados de migração separados.
+- PostgreSQL local isolado, com migrações incrementais até `0006` e preservação dos dados existentes.
+- RLS/FORCE RLS nas dezenove tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.
 - Escopo de empresa por transação e verificações adicionais por unidade, objeto e perfil na API.
-- Sessões e tokens de convite persistidos por hash; segredos de integração e conteúdo das fotos criptografados.
+- Sessões e convites autenticados por hash; segredos de integração, conteúdo das fotos e corpo temporário de convites na fila criptografados. O corpo da fila é limpo quando o processamento termina ou é cancelado.
 - Validação de origem/CSRF, limites de requisição e tentativas, consultas parametrizadas e respostas sem segredos brutos.
 - Cookies HttpOnly/SameSite; Secure para origem HTTPS, exigida fora do ambiente de desenvolvimento.
 - CSP, escape de texto no frontend, foco/teclado em diálogos e testes automatizados de acessibilidade.
@@ -194,7 +196,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 
 | Prioridade | Pendência | Resultado necessário |
 | --- | --- | --- |
-| 1 | Convites por Resend com fila transacional | Registrar convite e envio de forma consistente, com retentativas limitadas, proteção do token, expiração/invalidação e consulta de falhas |
+| 1 | Homologação real de convites Resend | Fluxo, fila, limites e consulta de falhas implementados; falta validar domínio, conta, remetente, origem acessível e recebimento real |
 | 1 | Recuperação de senha | Solicitação sem exposição de existência da conta, token temporário de uso único, limites e revogação de sessões apropriada |
 | 1 | WhatsApp via OpenWA | Homologar eventos recebidos, verificar identidade e empresa/unidade, vincular sessão, abrir relato guiado e enviar protocolo somente após persistência |
 | 1 | Confiabilidade de mensagens | Distinguir enfileirado, aceito pelo provedor, entregue quando comprovado e falho; evitar duplicação e permitir reprocessamento autorizado |
@@ -321,7 +323,7 @@ Planos de uso e cobrança por plano não fazem parte do escopo definido para est
 
 ## 10. Sequência recomendada de desenvolvimento
 
-1. **Fechar acesso e e-mail:** fila de convites Resend, tratamento de falhas e recuperação de senha.
+1. **Fechar acesso e e-mail:** homologar o envio de convites já implementado e desenvolver recuperação de senha; mensagens operacionais e confirmação de entrega seguem como incrementos próprios.
 2. **Homologar OpenWA em paralelo à preparação operacional:** obter o contrato de eventos, validar identidade, sessão por empresa e abertura guiada sem duplicação.
 3. **Completar o piloto web:** informação adicional no relato, checklist, filtros e regras de evidência acordadas com a unidade piloto.
 4. **Preparar entrada em produção:** privacidade, suporte autorizado, autenticação necessária, infraestrutura e restauração; homologar os fluxos ponta a ponta.
@@ -333,9 +335,9 @@ Decisões operacionais ainda necessárias: cliente/unidade piloto, categorias in
 
 ## 11. Validação e atualização deste documento
 
-A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
+A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de convites](backend/email_outbox.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
 
-As entregas anteriores registraram suíte de API em SQLite/PostgreSQL, build e 32 cenários web aprovados, incluindo dois fluxos com API real, privacidade de fotos e acessibilidade em desktop/celular. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica. Não foram reexecutados testes funcionais para esta alteração exclusivamente documental.
+As verificações registraram suíte de API em SQLite/PostgreSQL, build e 34 cenários web aprovados, incluindo três fluxos com API real, fila com provedor simulado, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
 
 O ambiente local de validação é [Nexus Facilities OS dev](http://127.0.0.1:5180/nexus/empresas), quando os serviços locais estiverem em execução. Não há implantação externa de produção documentada como concluída.
 

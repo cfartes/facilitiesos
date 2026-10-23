@@ -38,9 +38,9 @@ def foundation(request, tmp_path, monkeypatch):
         migration_engine.dispose()
         for name in ('FACILITIES_PLATFORM_DATABASE_URL','FACILITIES_DATABASE_URL'):
             monkeypatch.setenv(name, make_url(os.environ[name]).set(database=test_db).render_as_string(hide_password=False))
-        app = create_app(admin_email='admin@example.com', admin_hash=password_hash(PASSWORD), encryption_key=Fernet.generate_key(), origin=ORIGIN)
+        app = create_app(admin_email='admin@example.com', admin_hash=password_hash(PASSWORD), encryption_key=Fernet.generate_key(), origin=ORIGIN, start_email_worker=False)
     else:
-        app = create_app(tmp_path / 'foundation.db', 'admin@example.com', password_hash(PASSWORD), Fernet.generate_key(), ORIGIN)
+        app = create_app(tmp_path / 'foundation.db', 'admin@example.com', password_hash(PASSWORD), Fernet.generate_key(), ORIGIN, start_email_worker=False)
     try:
         with TestClient(app, base_url=ORIGIN, headers={'Origin': ORIGIN}) as client:
             login(client, 'admin@example.com')
@@ -338,6 +338,6 @@ def test_legacy_sqlite_upgrade_preserves_settings_and_audit(tmp_path):
         with engine.connect() as db:
             assert db.execute(text('SELECT email_from,version FROM configuration')).one() == ('existing@example.com', 7)
             assert db.execute(text('SELECT action,company_id FROM audit')).one() == ('integrations.updated', None)
-            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 5
+            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 6
     finally:
         engine.dispose()

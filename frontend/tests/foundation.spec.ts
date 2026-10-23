@@ -90,6 +90,8 @@ async function mockFoundation(
         json: route.request().method() === "GET" ? [company] : company,
       });
     if (path.endsWith("/locations")) return route.fulfill({ json: [unit] });
+    if (path.endsWith("/invitation-email"))
+      return route.fulfill({ json: { enabled: false } });
     if (path.endsWith("/users"))
       return route.fulfill({
         json:
@@ -465,9 +467,8 @@ test("fluxo completo com API real: empresa, unidades, convite, login e escopo", 
       page.getByRole("cell", { name: new RegExp(name) }).first(),
     ).toBeVisible();
   }
-  await page
-    .getByRole("link", { name: "Usuários e permissões", exact: true })
-    .click();
+  const pilotCompanyId = new URL(page.url()).searchParams.get("empresa");
+  await page.goto("/nexus/usuarios?empresa=" + pilotCompanyId);
   await page
     .getByRole("button", { name: "Convidar usuário", exact: true })
     .click();

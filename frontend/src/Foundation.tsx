@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import { CompanyForm } from "./CompanyForm";
-import { actionNames } from './operationTypes';
+import { InvitationEmailChoice } from "./InvitationEmailChoice";
+import { actionNames } from "./operationTypes";
 import { errorMessage, Loading, Modal, Notice } from "./ui";
 import type { Company, Invitation, Location, Member, User } from "./types";
 
@@ -24,6 +25,14 @@ const titles = {
   locations: "Estrutura física",
   users: "Usuários e permissões",
   audit: "Histórico de auditoria",
+};
+const emailStates: Record<string, string> = {
+  queued: "Na fila",
+  sending: "Em envio",
+  retrying: "Nova tentativa agendada",
+  accepted: "Aceito pelo Resend — entrega não confirmada",
+  failed: "Falha no envio",
+  cancelled: "Envio cancelado",
 };
 const subtitles = {
   companies: "Organize as empresas atendidas pela plataforma.",
@@ -54,9 +63,12 @@ const roles: Record<string, string> = {
 };
 const actions: Record<string, string> = {
   ...actionNames,
-  'category.created':'Categoria cadastrada', 'category.updated':'Categoria atualizada',
-  'asset.created':'Ativo cadastrado', 'asset.updated':'Ativo atualizado', 'occurrence.created':'Ocorrência registrada',
-  'order.message_added':'Mensagem registrada na ordem',
+  "category.created": "Categoria cadastrada",
+  "category.updated": "Categoria atualizada",
+  "asset.created": "Ativo cadastrado",
+  "asset.updated": "Ativo atualizado",
+  "occurrence.created": "Ocorrência registrada",
+  "order.message_added": "Mensagem registrada na ordem",
   "company.created": "Empresa cadastrada",
   "user.initial_admin_created": "Administrador inicial cadastrado",
   "company.updated": "Empresa atualizada",
@@ -67,6 +79,11 @@ const actions: Record<string, string> = {
   "user.access_updated": "Permissões do usuário alteradas",
   "user.invitation_reissued": "Convite reemitido",
   "user.invitation_accepted": "Convite aceito",
+  "invitation_email.queued": "Convite enfileirado para e-mail",
+  "invitation_email.accepted": "Convite aceito pelo provedor de e-mail",
+  "invitation_email.retrying": "Nova tentativa de e-mail agendada",
+  "invitation_email.failed": "Falha no envio do convite",
+  "invitation_email.cancelled": "Envio de convite cancelado",
 };
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR", {
@@ -318,6 +335,7 @@ function UserForm({
 }) {
   const [name, setName] = useState(member?.name ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
+  const [sendEmail, setSendEmail] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState(
     member?.roles ?? ["requester"],
   );
@@ -352,7 +370,7 @@ function UserForm({
         member ? "PUT" : "POST",
         member
           ? { ...payload, is_active: active, expected_version: member.version }
-          : { ...payload, email },
+          : { ...payload, email, send_email: sendEmail },
       );
       onSaved();
       onClose();
@@ -472,10 +490,11 @@ function UserForm({
             </>
           )}
           {!member && (
-            <p className="form-help">
-              Será gerado um link individual de primeiro acesso. O convite não
-              envia e-mail automaticamente nesta etapa.
-            </p>
+            <InvitationEmailChoice
+              companyId={companyId}
+              value={sendEmail}
+              onChange={setSendEmail}
+            />
           )}
           {error && <Notice error>{error}</Notice>}
           <div className="modal-actions">
@@ -513,6 +532,12 @@ function InvitationDialog({
   const [error, setError] = useState("");
   return (
     <Modal title="Convite de primeiro acesso" onClose={onClose}>
+      {invitation.email_queued && (
+        <Notice>
+          Convite registrado na fila de e-mail. Acompanhe o resultado na lista
+          de usuários; o envio não confirma entrega.
+        </Notice>
+      )}
       <p className="form-help">
         Compartilhe este link somente com a pessoa convidada, por um canal
         autorizado. Válido por {invitation.expires_in_hours} horas e para um
@@ -550,6 +575,71 @@ function InvitationDialog({
   );
 }
 
+function RenewInvitation({
+  companyId,
+  member,
+  onClose,
+  onSaved,
+}: {
+  companyId: string;
+  member: Member;
+  onClose: () => void;
+  onSaved: (invitation: Invitation) => void;
+}) {
+  const [sendEmail, setSendEmail] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      onSaved(
+        await api<Invitation>(
+          `/foundation/companies/${companyId}/users/${member.id}/invitation`,
+          "POST",
+          { send_email: sendEmail },
+        ),
+      );
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title="Gerar novo convite" busy={busy} onClose={onClose}>
+      <p className="form-help">
+        O link anterior de {member.name} será invalidado, e envios pendentes
+        desse convite serão cancelados. Uma mensagem já enviada ou em andamento
+        pode chegar com o link antigo, que não dará acesso.
+      </p>
+      <form onSubmit={submit}>
+        <fieldset className="plain-fieldset" disabled={busy}>
+          <InvitationEmailChoice
+            companyId={companyId}
+            value={sendEmail}
+            onChange={setSendEmail}
+          />
+          {error && <Notice error>{error}</Notice>}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onClose}
+            >
+              Cancelar
+            </button>
+            <button className="button primary" disabled={busy}>
+              Gerar novo convite
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </Modal>
+  );
+}
+
 export function Foundation({
   page,
   user,
@@ -575,7 +665,7 @@ export function Foundation({
   );
   const [userModal, setUserModal] = useState<Member | "new" | null>(null);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
-  const [busy, setBusy] = useState("");
+  const [renewing, setRenewing] = useState<Member | null>(null);
   const isNexus = user.role === "superadmin";
   const canManageUsers = isNexus || user.roles?.includes("company_admin");
   const canManageLocations =
@@ -688,22 +778,6 @@ export function Foundation({
   const filteredLocations = orderedLocations.filter((item) =>
     locationPath(item).toLowerCase().includes(search.toLowerCase()),
   );
-  async function reissue(member: Member) {
-    setBusy(member.id);
-    setError("");
-    try {
-      setInvitation(
-        await api<Invitation>(
-          `/foundation/companies/${companyId}/users/${member.id}/invitation`,
-          "POST",
-        ),
-      );
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusy("");
-    }
-  }
   return (
     <>
       <div className="page-heading">
@@ -784,6 +858,14 @@ export function Foundation({
               <>
                 {page !== "audit" && (
                   <div className="list-toolbar">
+                    {page === "users" && (
+                      <button
+                        className="button secondary compact"
+                        onClick={() => setRefresh((value) => value + 1)}
+                      >
+                        Atualizar envios
+                      </button>
+                    )}
                     <div className="search-field">
                       <Search size={17} />
                       <input
@@ -985,6 +1067,21 @@ export function Foundation({
                                   : member.invitation_pending
                                     ? "Convite pendente"
                                     : "Ativo"}
+                                {member.invitation_email && (
+                                  <>
+                                    <small>
+                                      Último e-mail:{" "}
+                                      {emailStates[
+                                        member.invitation_email.status
+                                      ] ?? "Indisponível"}
+                                    </small>
+                                    <small>
+                                      {member.invitation_email.attempts}{" "}
+                                      tentativa(s).{" "}
+                                      {member.invitation_email.last_error}
+                                    </small>
+                                  </>
+                                )}
                               </td>
                               <td>
                                 <div className="row-actions">
@@ -999,12 +1096,9 @@ export function Foundation({
                                     member.invitation_pending && (
                                       <button
                                         className="button secondary compact"
-                                        disabled={!!busy}
-                                        onClick={() => void reissue(member)}
+                                        onClick={() => setRenewing(member)}
                                       >
-                                        {busy === member.id
-                                          ? "Gerando…"
-                                          : "Novo convite"}
+                                        Novo convite
                                       </button>
                                     )}
                                 </div>
@@ -1118,6 +1212,18 @@ export function Foundation({
         <InvitationDialog
           invitation={invitation}
           onClose={() => setInvitation(null)}
+        />
+      )}
+      {renewing && (
+        <RenewInvitation
+          companyId={companyId}
+          member={renewing}
+          onClose={() => setRenewing(null)}
+          onSaved={(result) => {
+            setRenewing(null);
+            setInvitation(result);
+            saved();
+          }}
         />
       )}
     </>

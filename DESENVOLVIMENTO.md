@@ -7,7 +7,7 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0005` e RLS/FORCE RLS nas dezoito tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0006` e RLS/FORCE RLS nas dezenove tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
@@ -15,7 +15,7 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 - Auditoria por empresa e unidade, com consulta dos últimos cem eventos autorizados.
 - Validação de API em SQLite/PostgreSQL, interface responsiva, teclado, Axe e fluxo de convite/login com API real.
 
-O convite ainda é compartilhado manualmente por link. Calendários de funcionamento, equipes e organizações fornecedoras não estão implementados. O cadastro de fuso não equivale ao motor de SLA. Limites iniciais de listagem: 500 empresas, 1.000 usuários por empresa, 5.000 locais por empresa; paginar antes de ampliar essas escalas.
+O convite pode ser compartilhado manualmente ou enfileirado para Resend, após habilitação do Superadmin e solicitação explícita no cadastro/reemissão. A fila transacional protege o link temporariamente com criptografia, limita retentativas, cancela convites revogados/expirados e exibe o último resultado por usuário. Aceite do provedor não comprova entrega; homologação real e webhooks de entrega continuam pendentes. Calendários de funcionamento, equipes e organizações fornecedoras não estão implementados. O cadastro de fuso não equivale ao motor de SLA. Limites iniciais de listagem: 500 empresas, 1.000 usuários por empresa, 5.000 locais por empresa; paginar antes de ampliar essas escalas.
 
 ## Entregue — operação do piloto
 
@@ -29,9 +29,9 @@ O convite ainda é compartilhado manualmente por link. Calendários de funcionam
 
 Estados implementados: em triagem, atribuída, em execução, aguardando, resolvida e concluída; cancelamento e reabertura auditados. Conclusão automática permanece desabilitada no piloto. Uma contestação retoma a execução e abre novo ciclo; a próxima resolução exige novas confirmações. Atribuição preserva a primeira resposta registrada. Espera ainda não calcula nem pausa SLA. Solicitações críticas não devem depender exclusivamente do WhatsApp.
 
-O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e convites por e-mail com fila e tratamento de falhas seguem pendentes antes de ampliar o piloto.
+O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximo incremento: envio de convites pelo Resend com fila transacional e tratamento de falhas. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Em seguida, calendários e SLA antes de fornecedores/contratos/custos.
+Próximo incremento: recuperação de senha com token temporário e proteção contra enumeração de contas, reutilizando a infraestrutura de e-mail sem ampliar as permissões dos convites. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Em seguida, completar as pendências do piloto web e iniciar calendários/SLA antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
 
