@@ -2,6 +2,8 @@
 
 Atualizado em 23/10/2026. Referências: PDF funcional v1.0, diretrizes de segurança fornecidas e decisões desta conversa. O visual segue o Nexus RotaFY. Esta lista distingue recursos entregues de trabalho planejado; não representa implantação em produção.
 
+O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pendências e a proposta de evolução posterior. Este arquivo mantém a continuidade imediata do desenvolvimento.
+
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.

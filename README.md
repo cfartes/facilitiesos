@@ -2,6 +2,8 @@
 
 Nexus Facilities OS para validação do piloto, seguindo a identidade visual do Nexus RotaFY. Inclui cadastros, ocorrências, ordens de serviço, permissões por unidade, auditoria e configuração de OpenWA/Resend.
 
+Consulte o [escopo completo, entregas, pendências da fase 1 e próximas features](ESCOPO_PROJETO.md).
+
 ## Recursos disponíveis
 
 - Superadmin: cadastrar/editar/suspender empresas, organizar locais, convidar usuários, configurar permissões, consultar auditoria e administrar integrações.
