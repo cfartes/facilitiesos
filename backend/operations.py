@@ -123,11 +123,12 @@ ORDER_SELECT = '''SELECT w.*,l.name AS location_name,c.name AS category_name,u.n
  JOIN service_categories c ON c.id=w.category_id AND c.company_id=w.company_id
  LEFT JOIN users u ON u.id=w.assignee_id AND u.company_id=w.company_id
  LEFT JOIN assets a ON a.id=w.asset_id AND a.company_id=w.company_id'''
-OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_name,u.name AS requester_name,
+OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_name,COALESCE(u.name,contact.name) AS requester_name,
  a.name AS asset_name,w.code AS order_code,w.state AS order_state,w.solution,w.evidence,w.cycle
  FROM occurrences o JOIN locations l ON l.id=o.location_id AND l.company_id=o.company_id
  JOIN service_categories c ON c.id=o.category_id AND c.company_id=o.company_id
- JOIN users u ON u.id=o.requester_id AND u.company_id=o.company_id
+ LEFT JOIN users u ON u.id=o.requester_id AND u.company_id=o.company_id
+ LEFT JOIN whatsapp_contacts contact ON contact.id=o.requester_contact_id AND contact.company_id=o.company_id
  LEFT JOIN assets a ON a.id=o.asset_id AND a.company_id=o.company_id
  LEFT JOIN work_orders w ON w.id=o.order_id AND w.company_id=o.company_id'''
 
@@ -241,9 +242,10 @@ def register_operations(app, storage, actor, rate_limit, cipher):
         db.execute("UPDATE occurrences SET order_id=:order,outcome='linked',first_response_at=COALESCE(first_response_at,:time),version=version+1 WHERE id=:id AND company_id=:company", {
             'order': order['id'], 'id': occurrence['id'], 'company': order['company_id'], 'time': now(),
         })
-        db.execute('INSERT INTO order_participants(company_id,unit_id,order_id,user_id) VALUES(:company,:unit,:order,:user) ON CONFLICT(company_id,order_id,user_id) DO NOTHING', {
-            'company': order['company_id'], 'unit': order['unit_id'], 'order': order['id'], 'user': occurrence['requester_id'],
-        })
+        if occurrence['requester_id']:
+            db.execute('INSERT INTO order_participants(company_id,unit_id,order_id,user_id) VALUES(:company,:unit,:order,:user) ON CONFLICT(company_id,order_id,user_id) DO NOTHING', {
+                'company': order['company_id'], 'unit': order['unit_id'], 'order': order['id'], 'user': occurrence['requester_id'],
+            })
         event(db, user, order, 'occurrence.linked', 'Relato vinculado ao atendimento.')
         notify(db, user, order['company_id'], order['unit_id'], 'Ocorrência vinculada a uma ordem de serviço.', order['id'], occurrence['id'], occurrence['requester_id'])
 

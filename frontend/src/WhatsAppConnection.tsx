@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MessageCircle, RefreshCw } from "lucide-react";
 import { api } from "./api";
 import { errorMessage, Loading, Notice } from "./ui";
+import { WhatsAppIntake } from "./WhatsAppIntake";
 
 type Connection = {
   configured: boolean;
@@ -95,8 +96,8 @@ export function WhatsAppConnection() {
           )}
           {data?.status === "connected" ? (
             <Notice>
-              O número foi conectado ao OpenWA. A abertura de ocorrências pelo
-              WhatsApp ainda depende da implantação dos webhooks.
+              O número foi conectado ao OpenWA. Configure o recebimento de
+              solicitações abaixo.
             </Notice>
           ) : (
             <>
@@ -150,6 +151,7 @@ export function WhatsAppConnection() {
           </p>
         </div>
       </section>
+      <WhatsAppIntake connected={data?.status === "connected"} />
     </>
   );
 }

@@ -70,13 +70,17 @@ Index('uq_users_company_id', users.c.company_id, users.c.id, unique=True)
 Table('company_whatsapp', metadata,
     Column('company_id', String(36), ForeignKey('companies.id'), primary_key=True),
     Column('session_id', String(36), unique=True), Column('status', String(30), nullable=False, server_default='not_connected'),
-    Column('lease', String(36)), Column('lease_until', Float, nullable=False, server_default='0'))
+    Column('lease', String(36)), Column('lease_until', Float, nullable=False, server_default='0'),
+    Column('webhook_secret', Text, nullable=False, server_default=''), Column('bot_enabled', Integer, nullable=False, server_default='0'),
+    Column('enabled_since', Float, nullable=False, server_default='0'), Column('hook_status', String(30), nullable=False, server_default='disabled'))
 from backend.operation_schema import register_tables, apply_operation_policies
+from backend.whatsapp_schema import register_tables as register_whatsapp_tables, migration_connection, migrate as migrate_whatsapp, policies as whatsapp_policies
+register_whatsapp_tables(metadata)
 register_tables(metadata)
 
 
 def migrate_schema(engine):
-    with engine.begin() as connection:
+    with migration_connection(engine) as connection:
         if engine.dialect.name == 'postgresql':
             connection.execute(text('SELECT pg_advisory_xact_lock(741000)'))
         # Índices das tabelas anteriores devem existir antes das novas FKs compostas.
@@ -86,6 +90,7 @@ def migrate_schema(engine):
                 for index in table.indexes:
                     index.create(connection, checkfirst=True)
         metadata.create_all(connection)
+        migrate_whatsapp(connection, metadata)
         if 'invitation_email_enabled' not in {item['name'] for item in inspect(connection).get_columns('configuration')}:
             connection.execute(text('ALTER TABLE configuration ADD COLUMN invitation_email_enabled INTEGER NOT NULL DEFAULT 0'))
         if 'password_reset_enabled' not in {item['name'] for item in inspect(connection).get_columns('configuration')}:
@@ -105,11 +110,12 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009'):
+        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)
             apply_operation_policies(connection)
+            whatsapp_policies(connection)
 
 
 def apply_policies(connection):

@@ -10,6 +10,7 @@ for (const width of [1440, 390]) {
   }) => {
     let started = false;
     let ready = false;
+    let intakeEnabled = false;
     await page.setViewportSize({ width, height: 960 });
     await page.route("**/api/v1/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -23,6 +24,18 @@ for (const width of [1440, 390]) {
             company_id: "demo",
           },
         });
+      if (path.endsWith("/company/whatsapp/intake")) {
+        if (route.request().method() === "POST")
+          intakeEnabled = route.request().postDataJSON().enabled;
+        return route.fulfill({
+          json: {
+            enabled: intakeEnabled,
+            hook_status: intakeEnabled ? "active" : "disabled",
+            public_url_configured: true,
+            replies: intakeEnabled ? { uncertain: 1 } : {},
+          },
+        });
+      }
       if (path.endsWith("/company/whatsapp/connect")) {
         started = true;
         return route.fulfill({
@@ -69,6 +82,25 @@ for (const width of [1440, 390]) {
     await expect(
       page.getByRole("button", { name: "Conectar WhatsApp" }),
     ).toHaveCount(0);
+    await page
+      .getByRole("button", {
+        name: "Ativar solicitações pelo WhatsApp",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByText("Recebimento habilitado", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText(
+      "respostas cujo envio não foi confirmado",
+    );
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page
+      .getByRole("button", { name: "Desativar solicitações", exact: true })
+      .click();
+    await expect(
+      page.getByText("Recebimento desativado", { exact: true }),
+    ).toBeVisible();
   });
 }
 

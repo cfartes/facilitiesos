@@ -59,7 +59,7 @@ class EmailTest(Input):
     recipient: EmailStr
 
 
-def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=None, origin=None, start_email_worker=True):
+def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=None, origin=None, start_email_worker=True, start_whatsapp_worker=None):
     platform_url = os.getenv('FACILITIES_PLATFORM_DATABASE_URL') if database is None else None
     tenant_url = os.getenv('FACILITIES_DATABASE_URL') if database is None else None
     environment = os.getenv('FACILITIES_ENV', 'development')
@@ -87,12 +87,15 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     async def lifespan(app):
         stop = asyncio.Event()
         worker = asyncio.create_task(outbox.run(stop)) if start_email_worker else None
+        whatsapp_worker = asyncio.create_task(intake.run(stop)) if (start_email_worker if start_whatsapp_worker is None else start_whatsapp_worker) else None
         try:
             yield
         finally:
             stop.set()
             if worker:
                 await worker
+            if whatsapp_worker:
+                await whatsapp_worker
             storage.dispose()
 
     app = FastAPI(title='Nexus Facilities OS', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -106,12 +109,13 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
         return {'status': 'ok'}
     from urllib.parse import urlsplit
     host = urlsplit(allowed_origin).hostname
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list({host, '127.0.0.1', 'localhost', 'testserver'} if environment == 'development' else {host}))
+    trusted = {host, urlsplit(os.getenv('FACILITIES_WEBHOOK_ORIGIN', '')).hostname} - {None}
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(trusted | {'127.0.0.1', 'localhost', 'testserver'} if environment == 'development' else trusted))
 
     @app.middleware('http')
     async def security_headers(request: Request, call_next):
         if request.url.path.startswith('/api/') and request.method not in ('GET', 'HEAD', 'OPTIONS'):
-            if request.headers.get('origin') != allowed_origin:
+            if request.headers.get('origin') != allowed_origin and not request.url.path.startswith('/api/v1/webhooks/openwa/'):
                 response = JSONResponse({'detail': 'Origem não autorizada.'}, status_code=403)
             else:
                 # Interrompe a leitura ao atingir o limite, inclusive sem Content-Length.
@@ -331,4 +335,8 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
     register_operations(app, storage, actor, rate_limit, cipher)
     from backend.whatsapp import register_whatsapp
     register_whatsapp(app, storage, actor, rate_limit, cipher)
+    from backend.whatsapp_intake import WhatsAppIntake, register_intake
+    intake = WhatsAppIntake(storage, cipher, rate_limit, key)
+    app.state.whatsapp_intake = intake
+    register_intake(app, intake, actor)
     return app

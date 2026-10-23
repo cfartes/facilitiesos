@@ -2,7 +2,7 @@
 
 **Atualização:** 23/10/2026 — horário de Brasília.
 
-**Referência do código analisado:** branch `feat/foundation`, migrações até `0009`.
+**Referência do código analisado:** branch `feat/foundation`, migrações até `0010`.
 
 **Repositório:** [cfartes/facilitiesos](https://github.com/cfartes/facilitiesos).
 
@@ -69,7 +69,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | Ordens de serviço | Lista/quadro, filtros, atribuição, atividades, checklist, mensagens, anexos, orçamento e histórico | Parcial: fluxo de atendimento entregue; checklist, filtros completos e orçamento pendentes | Fase 1 para operação; fase 2 para orçamento, prazo e fornecedor |
 | Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo e fila de convites entregues; demais mensagens externas pendentes | Fase 1 |
 | Evidências | Texto, fotos e documentos privados conforme necessidade e autorização | Parcial: texto e fotos JPEG/PNG entregues; documentos gerais pendentes | Fase 1 para fotos; documentos após definição e validação próprias |
-| WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: chave e consulta de sessões entregues; fluxo operacional não implementado | Fase 1, condicionado à homologação do provedor |
+| WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: conexão, webhook assinado e abertura textual por contato sem login implementados; homologar na VPS, adicionar QR de equipamento/fotos e acompanhamento | Fase 1, condicionado à homologação do provedor |
 | E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: configuração, teste, convites, recuperação/aviso de senha, fila e retentativas entregues; demais mensagens e confirmação de entrega pendentes | Fase 1 |
 | Equipes e fornecedores | Equipes próprias, organizações prestadoras, cobertura e acesso restrito | Pendente; usuários técnicos individuais já existem | Fase 2 |
 | Contratos de serviço | Vigência, escopo, anexos, cobertura, metas, limites e vencimentos | Pendente | Fase 2 |
@@ -174,16 +174,16 @@ Limites atuais de imagens: **200 MiB de conteúdo normalizado por empresa**, dez
 
 | Integração | Disponível hoje | Ainda não disponível |
 | --- | --- | --- |
-| OpenWA | Chave no Superadmin; administrador do cliente inicia sessão exclusiva por empresa, consulta status e QR Code temporário; bloqueio de acesso entre empresas e trava de concorrência | Homologação do pareamento real, entrada de mensagens, abertura guiada de ocorrências e envio de atualizações |
+| OpenWA | Chave no Superadmin, sessão exclusiva e QR de conexão; cliente ativa webhook assinado; contato sem login, abertura textual com resumo/confirmação, protocolo, fila criptografada e contadores de respostas | Homologação dos eventos na VPS/Traefik, QR dos equipamentos/fotos e acompanhamento/atualizações pelo WhatsApp |
 | Resend | Chave, remetente, teste explícito, habilitação separada para convites/recuperação, fila transacional, retentativas limitadas e aviso de senha alterada; resultado do último convite por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
 | ViaCEP | Consulta de endereço pelo backend com preenchimento manual alternativo | Não é integração operacional de atendimento |
 
-Chave cadastrada não comprova conexão ativa. Aceite de e-mail pelo provedor não comprova entrega. O guia OpenWA recebido documenta envio/consulta, mas não define o contrato de webhooks necessário ao recebimento.
+Chave cadastrada não comprova conexão ativa. O usuário confirmou o funcionamento do QR de conexão. Aceite pelo provedor não comprova entrega. O guia OpenWA recebido documenta envio/consulta; o contrato de webhooks foi localizado posteriormente no código do RotaFY e implementado com testes simulados. Homologação real dos eventos ainda depende da publicação e TLS válido na VPS.
 
 ### 5.8. Segurança e estrutura técnica
 
-- PostgreSQL local isolado, com migrações incrementais até `0009` e preservação dos dados existentes.
-- RLS/FORCE RLS nas 22 tabelas privadas; metadados de migração separados.
+- PostgreSQL local isolado, com migrações incrementais até `0010` e preservação dos dados existentes.
+- RLS/FORCE RLS nas 26 tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.
 - Escopo de empresa por transação e verificações adicionais por unidade, objeto e perfil na API.
 - Sessões e convites autenticados por hash; segredos de integração, conteúdo das fotos e corpo temporário de convites na fila criptografados. O corpo da fila é limpo quando o processamento termina ou é cancelado.
@@ -202,7 +202,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | --- | --- | --- |
 | 1 | Homologação real de convites Resend | Fluxo, fila, limites e consulta de falhas implementados; falta validar domínio, conta, remetente, origem acessível e recebimento real |
 | 1 | Homologação da recuperação de senha | Fluxo para contas das empresas implementado e testado; validar recebimento real, disponibilidade e procedimento de suporte. Recuperação Nexus continua administrativa |
-| 1 | WhatsApp via OpenWA | Homologar pareamento e eventos recebidos, verificar identidade e empresa/unidade, abrir relato guiado e enviar protocolo somente após persistência |
+| 1 | WhatsApp via OpenWA | Homologar na VPS o fluxo textual implementado; completar leitura de QR/fotos e acompanhamento, com identidade por empresa/telefone e protocolo após persistência |
 | 1 | Confiabilidade de mensagens | Distinguir enfileirado, aceito pelo provedor, entregue quando comprovado e falho; evitar duplicação e permitir reprocessamento autorizado |
 | 1 | Privacidade e páginas legais do Facilities | Adaptar termos, política, cookies e compartilhamentos; disponibilizar canal e acompanhamento dos pedidos de titulares com procedimentos definidos |
 | 1 | Suporte Nexus em produção | Acesso autorizado pela empresa, temporário, limitado e auditado; definir necessidade de outros perfis Nexus e MFA antes de liberar acesso externo |
@@ -213,7 +213,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | 2 | Paginação e capacidade do piloto | Paginar consultas que ultrapassem os limites atuais; dimensionar banco e imagens conforme volume real |
 | Condicionada | PDFs e outros documentos privados | Confirmar necessidade no piloto e implementar tipos permitidos, limites, validação, verificação de malware, autorização e retenção antes de aceitar arquivos |
 
-O recebimento por WhatsApp permanece no escopo desejado. Caso a homologação do provedor não esteja disponível, o portal web permite validar o núcleo operacional, mas o recurso WhatsApp continuará pendente e não deve ser marcado como entregue.
+O recebimento textual pelo WhatsApp está implementado para homologação, sem exigir usuários previamente cadastrados. Contatos são identificados pela empresa/sessão e pelo telefone, e o nome é coletado no primeiro contato; isso não comprova vínculo empregatício. QR/fotos dos equipamentos e acompanhamento pelo canal são etapas posteriores. O fluxo externo ainda não deve ser marcado como homologado enquanto não for validado na VPS.
 
 ### 6.1. Fluxo desejado para WhatsApp
 
@@ -327,7 +327,7 @@ Planos de uso e cobrança por plano não fazem parte do escopo definido para est
 ## 10. Sequência recomendada de desenvolvimento
 
 1. **Homologar acesso e e-mail:** convites e recuperação de senha das empresas já implementados; validar recebimento e suporte. Mensagens operacionais, recuperação Nexus e confirmação de entrega seguem como incrementos próprios.
-2. **Homologar OpenWA em paralelo à preparação operacional:** obter o contrato de eventos, validar identidade, sessão por empresa e abertura guiada sem duplicação.
+2. **Homologar OpenWA em paralelo à preparação operacional:** validar na VPS o contrato de eventos encontrado no RotaFY, identidade de contato, sessão por empresa e abertura textual sem duplicação.
 3. **Completar o piloto web:** informação adicional no relato, checklist, filtros e regras de evidência acordadas com a unidade piloto.
 4. **Preparar entrada em produção:** privacidade, suporte autorizado, autenticação necessária, infraestrutura e restauração; homologar os fluxos ponta a ponta.
 5. **Iniciar fase 2:** calendários/SLA, equipes e fornecedores, contratos, orçamento/custos/aprovações e indicadores.

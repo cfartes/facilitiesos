@@ -8,7 +8,7 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
 - Login no modelo visual do RotaFY: painel institucional, formulário com alternância de visibilidade da senha, versões de empresa/Nexus e apresentação compacta no celular. Autenticação e permissões existentes preservadas; redefinição web continua exclusiva das contas das empresas.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0009` e RLS/FORCE RLS nas 22 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0010` e RLS/FORCE RLS nas 26 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Superadmin restrito a empresas, integrações e auditoria, com bloqueio operacional também na API. Administrador do cliente gerencia estrutura, usuários e operação; dispõe do menu WhatsApp para iniciar a sessão exclusiva da empresa e ler o QR Code temporário.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
@@ -35,13 +35,15 @@ Estados implementados: em triagem, atribuída, em execução, aguardando, resolv
 
 O Superadmin não acessa a operação em nenhum ambiente. Eventual suporte futuro exige perfil próprio e autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximo incremento: checklist operacional e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e à verificação de identidade dos solicitantes. O vínculo de sessão por empresa e a tela de QR Code estão implementados, com pareamento real a homologar. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
+Próximos incrementos: homologar a abertura textual na VPS/Traefik; etapa 2, QR dos equipamentos e fotos recebidas; etapa 3, acompanhamento/complementos/confirmação pelo WhatsApp. Checklist operacional e filtros por unidade/categoria/responsável permanecem no piloto web. Calendários/SLA vêm após essas pendências, antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
 
-O administrador do cliente conecta pelo menu WhatsApp; a sessão usa nome exclusivo `facilities-{empresa}` e vínculo privado persistido. A API Key permanece global no Superadmin. O fluxo utiliza os endpoints de criação/inicialização/status/QR encontrados no RotaFY, sem copiar suas credenciais, e ainda exige pareamento real para homologação. QR não é persistido nem auditado; leituras são autenticadas e sem cache. Antes de receber ocorrências, verificar identidade do solicitante e homologar os eventos recebidos. O guia disponibilizado cobre envio e consulta, sem contrato de webhooks.
+O administrador do cliente conecta pelo menu WhatsApp; a sessão usa nome exclusivo `facilities-{empresa}` e vínculo privado persistido. O usuário confirmou o QR de conexão funcionando. A API Key permanece global no Superadmin. Contratos de sessão e webhook foram localizados no RotaFY, sem copiar credenciais. QR de conexão não é persistido nem auditado; leituras são autenticadas e sem cache.
 
-Fluxo guiado proposto: identificar solicitante, coletar unidade/local, descrição e foto opcional, confirmar resumo, persistir a ocorrência e só então informar o protocolo. Reenvios não podem criar relatos duplicados. Conexão, fila, falhas e reprocessamentos devem ser observáveis. IA não é necessária para esse fluxo.
+Etapa textual implementada: contato por empresa/telefone sem usuário/senha; nome no primeiro contato; unidade/local/equipamento opcional; descrição; resumo/confirmação; ocorrência na triagem; protocolo e aviso interno. Menus numerados com paginação, VOLTAR/CANCELAR/MENU e expiração de conversa. Categoria de entrada: Solicitações via WhatsApp. Webhook HMAC, deduplicação transacional, fila criptografada e contadores no cliente. Envio ambíguo não é repetido automaticamente. Nomes e posse de telefone não comprovam vínculo empregatício.
+
+Infraestrutura informada: Traefik existente, vários apps na VPS, domínio `facilities.nexusdataanalytics.tech`. A [referência de publicação](infra/TRAEFIK.md) mantém host/routers/services próprios e rede externa existente. Na consulta desta sessão, o DNS resolveu para a VPS, mas o HTTPS apresentou certificado autoassinado; é necessário conferir router/resolver TLS e publicar a API nesta versão antes da homologação dos eventos. O dev local não recebe eventos da VPS somente por configurar o domínio. Nenhuma configuração dos outros apps foi alterada.
 
 ## Controle e inteligência — posterior à operação
 

@@ -51,7 +51,8 @@ export type Occurrence = {
   location_id: string;
   category_id: string;
   asset_id: string | null;
-  requester_id: string;
+  requester_id: string | null;
+  requester_contact_id?: string | null;
   requester_name: string;
   location_name: string;
   category_name: string;

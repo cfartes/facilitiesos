@@ -356,6 +356,6 @@ def test_legacy_sqlite_upgrade_preserves_settings_and_audit(tmp_path):
         with engine.connect() as db:
             assert db.execute(text('SELECT email_from,version FROM configuration')).one() == ('existing@example.com', 7)
             assert db.execute(text('SELECT action,company_id FROM audit')).one() == ('integrations.updated', None)
-            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 9
+            assert db.execute(text('SELECT count(*) FROM schema_versions')).scalar_one() == 10
     finally:
         engine.dispose()

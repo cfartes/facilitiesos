@@ -68,6 +68,8 @@ const actions: Record<string, string> = {
   "asset.created": "Ativo cadastrado",
   "asset.updated": "Ativo atualizado",
   "occurrence.created": "Ocorrência registrada",
+  "whatsapp.intake_enabled": "Solicitações pelo WhatsApp habilitadas",
+  "whatsapp.intake_disabled": "Solicitações pelo WhatsApp desativadas",
   "order.message_added": "Mensagem registrada na ordem",
   "company.created": "Empresa cadastrada",
   "user.initial_admin_created": "Administrador inicial cadastrado",

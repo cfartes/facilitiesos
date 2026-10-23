@@ -55,10 +55,11 @@ class Database:
                     row = connection.execute(text('SELECT rolname,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=current_user')).mappings().one()
                     if row['rolname'] != expected or any(row[key] for key in ('rolsuper', 'rolbypassrls', 'rolcreatedb', 'rolcreaterole')):
                         raise RuntimeError('Papel de runtime inválido: use facilities_app/platform sem privilégios administrativos ou BYPASSRLS.')
-                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004','0005','0006','0007','0008','0009')")).scalar_one() != 9:
+                    if connection.execute(text("SELECT count(*) FROM schema_versions WHERE version IN ('0001','0002','0003','0004','0005','0006','0007','0008','0009','0010')")).scalar_one() != 10:
                         raise RuntimeError('Execute python -m backend.migrate antes de iniciar a API.')
                     from backend.operation_schema import OP_TABLES
-                    tables = ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations','email_outbox','password_resets','company_whatsapp') + OP_TABLES
+                    from backend.whatsapp_schema import PRIVATE_TABLES
+                    tables = ('configuration','sessions','audit','rate_limits','companies','users','auth_accounts','invitations','locations','email_outbox','password_resets','company_whatsapp') + OP_TABLES + PRIVATE_TABLES
                     protected = connection.execute(text("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN :tables AND c.relrowsecurity AND c.relforcerowsecurity").bindparams(bindparam('tables', expanding=True)), {'tables': tables}).scalar_one()
                     if protected != len(tables):
                         raise RuntimeError('As políticas RLS/FORCE RLS da fundação não estão completas.')
