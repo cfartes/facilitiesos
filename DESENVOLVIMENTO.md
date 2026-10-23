@@ -7,7 +7,7 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 ## Entregue — integrações e fundação
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.
-- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0007` e RLS/FORCE RLS nas vinte tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
+- PostgreSQL local isolado, papéis proprietários/runtime separados, migrações incrementais até `0008` e RLS/FORCE RLS nas 21 tabelas com dados privados. Metadados de migração sem dados privados em `schema_versions`.
 - Empresas, suspensão, locais hierárquicos, criticidade e fuso por unidade.
 - Cadastro completo de empresa seguindo os campos do RotaFY, sem plano, com administrador inicial, máscaras/validações de CPF/CNPJ e telefone, endereço e consulta de CEP pelo backend. Migração incremental `0003` preserva os registros anteriores. Tipo de operação adaptado ao Facilities; dados cadastrais detalhados são retornados apenas a Superadmin e administrador da empresa.
 - Convites de uso único, senha definida pelo usuário, perfis acumuláveis e escopo por unidade.
@@ -27,12 +27,13 @@ O convite pode ser compartilhado manualmente ou enfileirado para Resend, após h
 5. Resolução com evidência textual, confirmação/contestação pelo solicitante e reabertura justificada.
 6. Notificações internas individuais, com leitura protegida por usuário.
 7. Fotos JPEG/PNG privadas, com validação do conteúdo, limites, remoção de metadados, criptografia, download autorizado e remoção auditada. Fotos de relatos não são compartilhadas automaticamente com participantes da ordem. Limites e procedimento de uso no README.
+8. Complementos textuais privados antes da OS, com autor/data, histórico preservado, reenvio idempotente, auditoria e notificações internas. Solicitante e coordenação escrevem; perfis de consulta autorizados apenas leem. A vinculação encerra os novos complementos e mantém a consulta privada.
 
 Estados implementados: em triagem, atribuída, em execução, aguardando, resolvida e concluída; cancelamento e reabertura auditados. Conclusão automática permanece desabilitada no piloto. Uma contestação retoma a execução e abre novo ciclo; a próxima resolução exige novas confirmações. Atribuição preserva a primeira resposta registrada. Espera ainda não calcula nem pausa SLA. Solicitações críticas não devem depender exclusivamente do WhatsApp.
 
 O Superadmin acessa a operação somente em desenvolvimento; o acesso de suporte fora desse ambiente aguarda autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximo incremento: complementar o relato com texto e histórico antes de sua vinculação à OS, preservando o acesso privado do solicitante. Depois, checklist e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
+Próximo incremento: checklist operacional e filtros dedicados por unidade/categoria/responsável. O recebimento pelo WhatsApp continua condicionado à definição/homologação dos webhooks e ao vínculo de sessões por empresa. Calendários/SLA vêm após as pendências do piloto web, antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
 

@@ -101,7 +101,7 @@ def migrate_schema(engine):
                 datatype = companies.c[name].type.compile(dialect=connection.dialect)
                 connection.execute(text(f'ALTER TABLE companies ADD COLUMN {name} {datatype}'))
         connection.execute(text('UPDATE companies SET corporate_name=name WHERE corporate_name IS NULL'))
-        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007'):
+        for version in ('0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008'):
             connection.execute(text('INSERT INTO schema_versions(version) VALUES(:version) ON CONFLICT(version) DO NOTHING'), {'version': version})
         if engine.dialect.name == 'postgresql':
             apply_policies(connection)

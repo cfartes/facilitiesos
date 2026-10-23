@@ -2,7 +2,7 @@
 
 **Atualização:** 23/10/2026 — horário de Brasília.
 
-**Referência do código analisado:** branch `feat/foundation`, migrações até `0007`.
+**Referência do código analisado:** branch `feat/foundation`, migrações até `0008`.
 
 **Repositório:** [cfartes/facilitiesos](https://github.com/cfartes/facilitiesos).
 
@@ -64,7 +64,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | Locais | Unidade, prédio, andar, ambiente, criticidade, fuso, responsáveis e calendário | Parcial: hierarquia, criticidade e fuso entregues | Fase 2 para calendário e organização ampliada |
 | Ativos | Identificação, categoria, local, situação, criticidade, documentos e histórico | Parcial: cadastro e histórico de ordens entregues; documentos próprios do ativo pendentes | Fase 1 para a base; fase 2 para documentação ampliada |
 | Categorias de serviço | Catálogo de tipos de atendimento | Implementado no cadastro básico | Fase 1; parametrizações de SLA/checklist em etapas seguintes |
-| Portal do solicitante | Relatar problema, anexar evidência, acompanhar, complementar e confirmar/contestar | Parcial: fluxo principal entregue; complementar texto antes da vinculação à OS precisa ser tratado | Fase 1 |
+| Portal do solicitante | Relatar problema, anexar evidência, acompanhar, complementar e confirmar/contestar | Fluxo web entregue, incluindo complementos privados antes da OS; homologação do piloto pendente | Fase 1 |
 | Triagem | Impacto, urgência, encaminhamento e reunião de relatos sobre um problema | Implementado manualmente | Fase 1; sugestões de duplicidade por IA na fase 3 |
 | Ordens de serviço | Lista/quadro, filtros, atribuição, atividades, checklist, mensagens, anexos, orçamento e histórico | Parcial: fluxo de atendimento entregue; checklist, filtros completos e orçamento pendentes | Fase 1 para operação; fase 2 para orçamento, prazo e fornecedor |
 | Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo e fila de convites entregues; demais mensagens externas pendentes | Fase 1 |
@@ -131,11 +131,12 @@ Categorias de equipamento e categorias de serviço são informações distintas.
 - Registro do próprio solicitante ou, pela coordenação, em nome de pessoa ativa e autorizada na unidade.
 - Protocolo individual e proteção contra duplicação por reenvio com o mesmo identificador de solicitação.
 - Ocorrência separada da ordem de serviço.
+- Complementos privados de até 4.000 caracteres, limitados a cem por relato, com autor/data, reenvio idempotente e notificação interna. Solicitante e coordenação escrevem antes da vinculação; o histórico permanece privado e sem edição/exclusão pela aplicação após a criação da OS.
 - Criação de uma OS a partir do relato e vinculação manual de outros relatos à mesma OS.
 - Vinculação exige o mesmo local, categoria e ativo; não existe sugestão automática de duplicidade.
 - Solicitantes consultam seus próprios relatos; estar na mesma OS não libera os relatos privados de outras pessoas.
 - Prioridade calculada por impacto e urgência, ambos de 1 a 4: produto 1–3 baixo, 4–7 médio, 8–11 alto e 12–16 crítico.
-- Registro inicial de primeira resposta humana no encaminhamento manual do relato; isso ainda não constitui um motor de SLA ou um indicador homologado.
+- Primeira resposta humana registrada no complemento da coordenação ao solicitante ou no encaminhamento manual do relato; mensagens do próprio solicitante não contam. Isso ainda não constitui um motor de SLA ou um indicador homologado.
 
 ### 5.5. Atendimento e ordens de serviço
 
@@ -180,8 +181,8 @@ Chave cadastrada não comprova conexão ativa. Aceite de e-mail pelo provedor n�
 
 ### 5.8. Segurança e estrutura técnica
 
-- PostgreSQL local isolado, com migrações incrementais até `0007` e preservação dos dados existentes.
-- RLS/FORCE RLS nas vinte tabelas privadas; metadados de migração separados.
+- PostgreSQL local isolado, com migrações incrementais até `0008` e preservação dos dados existentes.
+- RLS/FORCE RLS nas 21 tabelas privadas; metadados de migração separados.
 - Papéis distintos para migração, plataforma e aplicação; runtime sem privilégios administrativos ou BYPASSRLS.
 - Escopo de empresa por transação e verificações adicionais por unidade, objeto e perfil na API.
 - Sessões e convites autenticados por hash; segredos de integração, conteúdo das fotos e corpo temporário de convites na fila criptografados. O corpo da fila é limpo quando o processamento termina ou é cancelado.
@@ -205,7 +206,6 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | 1 | Privacidade e páginas legais do Facilities | Adaptar termos, política, cookies e compartilhamentos; disponibilizar canal e acompanhamento dos pedidos de titulares com procedimentos definidos |
 | 1 | Suporte Nexus em produção | Acesso autorizado pela empresa, temporário, limitado e auditado; definir necessidade de outros perfis Nexus e MFA antes de liberar acesso externo |
 | 1 | Preparação de produção e homologação | HTTPS, segredos, infraestrutura, monitoramento, backups/restauração, teste de isolamento e aprovação do cliente piloto |
-| 2 | Complementação do relato antes da OS | Permitir informação adicional com histórico e autorização, sem depender de mensagem em uma OS ainda inexistente |
 | 2 | Checklist operacional | Itens de execução/verificação e regras de obrigatoriedade acordadas com a operação piloto |
 | 2 | Filtros operacionais dedicados | Unidade, categoria e responsável, mantendo o escopo de acesso; fornecedor e prazo entram com a fase 2 |
 | 2 | Regras de evidência por serviço | Definir quando fotos/checklist são obrigatórios e como comprovar a resolução; hoje só o texto é obrigatório |
@@ -339,7 +339,7 @@ Decisões operacionais ainda necessárias: cliente/unidade piloto, categorias in
 
 A implementação foi conferida nos módulos de [fundação](backend/foundation.py), [operação](backend/operations.py), [tratamento de imagens](backend/attachments.py), [fila de e-mails de acesso](backend/email_outbox.py), [recuperação de senha](backend/password_reset.py), [API e integrações](backend/main.py), [provedores](backend/providers.py), [schema](backend/schema.py), [políticas operacionais](backend/operation_schema.py) e nas telas correspondentes em `frontend/src`.
 
-As verificações registraram suíte de API em SQLite/PostgreSQL, build e 37 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
+As verificações registraram suíte de API em SQLite/PostgreSQL, build e 39 cenários web aprovados, incluindo quatro fluxos com API real, fila/caixa de e-mail sintéticas, recuperação de senha, complementos privados, privacidade de fotos e acessibilidade em desktop/celular. A fila também possui testes de cancelamento, retomada após perda de processamento, limite de tentativas, rotação de chave e janela de idempotência. Isso não comprova homologação dos provedores com contas reais, validação de produção ou revisão jurídica.
 
 O ambiente local de validação é [Nexus Facilities OS dev](http://127.0.0.1:5180/nexus/empresas), quando os serviços locais estiverem em execução. Não há implantação externa de produção documentada como concluída.
 

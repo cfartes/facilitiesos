@@ -153,6 +153,83 @@ async function mockOperations(page: Page, requester = false) {
 }
 
 for (const width of [1440, 390]) {
+  test(`complementos privados e triagem a ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 960 });
+    await mockOperations(page);
+    let version = 1;
+    let expectedVersion = 0;
+    const items: object[] = [];
+    const occurrence = {
+      ...initialOrder,
+      id: "report-demo",
+      code: "REL-00001",
+      order_id: null,
+      requester_id: person.id,
+      requester_name: person.name,
+      outcome: "open",
+      first_response_at: null,
+    };
+    await page.route("**/api/v1/operations/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith("/occurrences"))
+        return route.fulfill({ json: [occurrence] });
+      if (path.endsWith("/occurrences/report-demo/messages")) {
+        if (route.request().method() === "POST") {
+          const body = route.request().postDataJSON();
+          expect(body.client_request_id).toMatch(/^[a-f0-9-]{36}$/);
+          items.push({
+            id: "message-1",
+            body: body.body,
+            actor_name: person.name,
+            created_at: initialOrder.created_at,
+          });
+          version++;
+          return route.fulfill({ status: 201, json: { version } });
+        }
+        return route.fulfill({ json: { items, can_add: true, version } });
+      }
+      if (path.endsWith("/orders") && route.request().method() === "POST") {
+        expectedVersion = route
+          .request()
+          .postDataJSON().expected_occurrence_version;
+        return route.fulfill({ status: 201, json: initialOrder });
+      }
+      return route.fallback();
+    });
+    await page.goto("/nexus/ocorrencias?ocorrencia=report-demo");
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByLabel("Adicionar complemento privado")
+      .fill("O vazamento aumentou desde a abertura.");
+    await dialog
+      .getByRole("button", { name: "Registrar complemento", exact: true })
+      .click();
+    await expect(
+      dialog.getByText("O vazamento aumentou desde a abertura.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByLabel("Adicionar complemento privado"),
+    ).toHaveValue("");
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await dialog
+      .getByRole("button", { name: "Criar ordem de serviço", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", { name: "Criar ordem", exact: true })
+      .click();
+    await expect.poll(() => expectedVersion).toBe(2);
+    await expect(
+      dialog.getByRole("heading", { name: initialOrder.title }),
+    ).toBeVisible();
+  });
+
   test(`operação acessível e formulários a ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 960 });
     await mockOperations(page);

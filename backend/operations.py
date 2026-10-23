@@ -97,6 +97,11 @@ class ConfirmationInput(Input):
     note: str = Field(default='', max_length=2000)
 
 
+class OccurrenceMessageInput(Input):
+    body: str = Field(min_length=1, max_length=4000)
+    client_request_id: UUID
+
+
 def coordinates(user):
     return user['role'] == 'superadmin' or bool(set(user.get('roles', [])) & COORDINATORS)
 
@@ -452,6 +457,50 @@ def register_operations(app, storage, actor, rate_limit, cipher):
         with storage.scoped(user, company) as db:
             rows = db.execute(OCCURRENCE_SELECT + ' WHERE o.company_id=:company' + condition + ' ORDER BY o.created_at DESC,o.id DESC LIMIT 500', params).fetchall()
         return [dict(row) for row in rows if unit_allowed(user, row['unit_id'])]
+
+    @app.get('/api/v1/operations/companies/{company_id}/occurrences/{occurrence_id}/messages')
+    def occurrence_messages(company_id: UUID, occurrence_id: UUID, user=Depends(actor)):
+        company = scope(user, company_id)
+        with storage.scoped(user, company) as db:
+            row = get_occurrence(db, user, company, occurrence_id)
+            items = db.execute('''SELECT id,actor_name,body,created_at FROM occurrence_messages
+                WHERE company_id=:company AND occurrence_id=:id ORDER BY created_at,id LIMIT 100''',
+                {'company': company, 'id': row['id']}).fetchall()
+            return {'items': [dict(item) for item in items], 'version': row['version'],
+                    'can_add': not row['order_id'] and (coordinates(user) or row['requester_id'] == user.get('id'))
+                    and (user['role'] == 'superadmin' or bool(set(user.get('roles', [])) - {'auditor'}))}
+
+    @app.post('/api/v1/operations/companies/{company_id}/occurrences/{occurrence_id}/messages', status_code=201)
+    def add_occurrence_message(company_id: UUID, occurrence_id: UUID, data: OccurrenceMessageInput, user=Depends(actor)):
+        company = scope(user, company_id)
+        write(user)
+        with storage.scoped(user, company) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = get_occurrence(db, user, company, occurrence_id)
+            if not coordinates(user) and row['requester_id'] != user.get('id'):
+                raise HTTPException(403, 'Somente o solicitante e a coordenação podem complementar o relato.')
+            values = {'company': company, 'occurrence': row['id'], 'request': str(data.client_request_id)}
+            previous = db.execute('''SELECT actor_id,body FROM occurrence_messages
+                WHERE company_id=:company AND occurrence_id=:occurrence AND client_request_id=:request''', values).fetchone()
+            if previous:
+                if previous['actor_id'] != user.get('id') or previous['body'] != data.body:
+                    raise HTTPException(409, 'Este envio já foi utilizado para outro complemento.')
+                return {'message': 'Complemento já registrado.', 'version': row['version']}
+            if row['order_id']:
+                raise HTTPException(409, 'O relato já possui uma ordem. Envie novas mensagens pela ordem de serviço.')
+            count = db.execute('SELECT count(*) AS total FROM occurrence_messages WHERE company_id=:company AND occurrence_id=:occurrence', values).fetchone()['total']
+            if count >= 100:
+                raise HTTPException(409, 'Limite de cem complementos atingido. Solicite a triagem do relato.')
+            db.execute('''INSERT INTO occurrence_messages(id,company_id,unit_id,occurrence_id,actor_id,actor_name,client_request_id,body,created_at)
+                VALUES(:id,:company,:unit,:occurrence,:actor_id,:actor_name,:request,:body,:created)''', values | {
+                'id': str(uuid4()), 'unit': row['unit_id'], 'actor_id': user.get('id'),
+                'actor_name': user.get('name', 'Administração Nexus'), 'body': data.body, 'created': now()})
+            db.execute('''UPDATE occurrences SET version=version+1,
+                first_response_at=COALESCE(first_response_at,:response) WHERE company_id=:company AND id=:id''', {
+                'company': company, 'id': row['id'], 'response': now() if row['requester_id'] != user.get('id') else None})
+            record_audit(db, user, 'occurrence.message_added', company, row['id'], row['unit_id'])
+            notify(db, user, company, row['unit_id'], 'Novo complemento no relato privado.', occurrence_id=row['id'], requester=row['requester_id'])
+            return {'message': 'Complemento registrado.', 'version': row['version'] + 1}
 
     @app.post('/api/v1/operations/companies/{company_id}/occurrences', status_code=201)
     def create_occurrence(company_id: UUID, data: OccurrenceInput, user=Depends(actor)):

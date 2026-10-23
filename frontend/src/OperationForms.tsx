@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "./api";
 import { Attachments } from "./Attachments";
+import { OccurrenceMessages } from "./OccurrenceMessages";
 import { errorMessage, Modal, Notice } from "./ui";
 import type {
   Asset,
@@ -439,6 +440,7 @@ export function OccurrenceDetail({
   onOrder: (id: string) => void;
 }) {
   const [mode, setMode] = useState("view"),
+    [reportVersion, setReportVersion] = useState(report.version),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [impact, setImpact] = useState(2),
@@ -469,7 +471,7 @@ export function OccurrenceDetail({
       if (mode === "create") {
         const order = await api<WorkOrder>(base + "/orders", "POST", {
           occurrence_id: report.id,
-          expected_occurrence_version: report.version,
+          expected_occurrence_version: reportVersion,
           title: form.get("title"),
           description: form.get("description"),
           impact,
@@ -495,7 +497,7 @@ export function OccurrenceDetail({
           "POST",
           {
             outcome: mode,
-            expected_version: report.version,
+            expected_version: reportVersion,
             note: form.get("note") ?? "",
           },
         );
@@ -553,6 +555,12 @@ export function OccurrenceDetail({
             Abrir ordem de serviço
           </button>
         </div>
+      )}
+      {mode === "view" && (
+        <OccurrenceMessages
+          base={base + "/occurrences/" + report.id}
+          onVersion={setReportVersion}
+        />
       )}
       {mode === "view" && (
         <Attachments base={base + "/occurrences/" + report.id} />

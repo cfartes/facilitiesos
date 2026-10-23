@@ -2,7 +2,7 @@
 from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, Table, Text, UniqueConstraint
 
 OP_TABLES = ('service_categories', 'assets', 'occurrences', 'work_orders', 'order_participants',
-             'order_messages', 'order_events', 'notifications', 'attachments')
+             'order_messages', 'order_events', 'notifications', 'attachments', 'occurrence_messages')
 
 
 def register_tables(metadata):
@@ -75,6 +75,13 @@ def register_tables(metadata):
           ForeignKeyConstraint(['company_id','user_id'], ['users.company_id','users.id']), order_fk())
     occurrences = metadata.tables['occurrences']
     Index('uq_occurrences_company_unit_id', occurrences.c.company_id, occurrences.c.unit_id, occurrences.c.id, unique=True)
+    Table('occurrence_messages', metadata, *identity(), unit(), Column('occurrence_id', String(36), nullable=False),
+          Column('actor_id', String(36)), Column('actor_name', String(160), nullable=False),
+          Column('client_request_id', String(36), nullable=False), Column('body', Text, nullable=False),
+          Column('created_at', Text, nullable=False),
+          UniqueConstraint('company_id','occurrence_id','client_request_id'),
+          ForeignKeyConstraint(['company_id','unit_id','occurrence_id'], ['occurrences.company_id','occurrences.unit_id','occurrences.id']),
+          ForeignKeyConstraint(['company_id','actor_id'], ['users.company_id','users.id']))
     # shortcut: imagens no banco com cota de piloto; migrar para objetos privados antes de ampliar a escala.
     Table('attachments', metadata, *identity(), unit(), Column('order_id', String(36)), Column('occurrence_id', String(36)),
           Column('uploader_id', String(36)), Column('uploader_name', String(160), nullable=False),
@@ -108,6 +115,7 @@ def apply_operation_policies(connection):
         'order_messages': f"{unit_scope} AND {view_order} AND (visibility='shared' OR {internal})",
         'order_events': f"{unit_scope} AND {view_order} AND (visibility='shared' OR {internal})",
         'notifications': f'{unit_scope} AND user_id={uid}',
+        'occurrence_messages': f"{unit_scope} AND EXISTS(SELECT 1 FROM occurrences o WHERE o.id=occurrence_messages.occurrence_id AND o.company_id=occurrence_messages.company_id AND ({manage} OR {review} OR o.requester_id={uid}))",
         'attachments': f"""{unit_scope} AND (
             (occurrence_id IS NOT NULL AND EXISTS(SELECT 1 FROM occurrences o WHERE o.id=attachments.occurrence_id AND o.company_id=attachments.company_id AND ({manage} OR {review} OR o.requester_id={uid})))
             OR (order_id IS NOT NULL AND EXISTS(SELECT 1 FROM work_orders w WHERE w.id=attachments.order_id AND w.company_id=attachments.company_id)
@@ -125,8 +133,15 @@ def apply_operation_policies(connection):
         connection.execute(text(f'DROP POLICY IF EXISTS tenant_scope ON {table}'))
         connection.execute(text(f'CREATE POLICY tenant_scope ON {table} TO facilities_app USING({condition}) WITH CHECK({condition})'))
         connection.execute(text(f'GRANT INSERT ON {table} TO facilities_app'))
-        if table not in ('order_messages','order_events','order_participants','attachments'):
+        if table not in ('order_messages','order_events','order_participants','attachments','occurrence_messages'):
             connection.execute(text(f'GRANT UPDATE ON {table} TO facilities_app'))
+    connection.execute(text('REVOKE UPDATE ON occurrence_messages FROM facilities_platform'))
+    connection.execute(text('DROP POLICY IF EXISTS occurrence_message_write ON occurrence_messages'))
+    connection.execute(text(f'''CREATE POLICY occurrence_message_write ON occurrence_messages AS RESTRICTIVE FOR INSERT TO facilities_app
+        WITH CHECK (current_setting('app.write_operations',true)='true' AND (actor_id={uid}) AND EXISTS(SELECT 1 FROM occurrences o WHERE o.id=occurrence_messages.occurrence_id
+            AND o.company_id=occurrence_messages.company_id AND o.order_id IS NULL)
+            AND ({manage}
+                OR EXISTS(SELECT 1 FROM occurrences o WHERE o.id=occurrence_messages.occurrence_id AND o.company_id=occurrence_messages.company_id AND o.requester_id={uid})))'''))
     # Permite entregar avisos a outros participantes, mantendo a leitura individual.
     connection.execute(text('DROP POLICY IF EXISTS notification_delivery ON notifications'))
     connection.execute(text(f'CREATE POLICY notification_delivery ON notifications FOR INSERT TO facilities_app WITH CHECK({unit_scope})'))
