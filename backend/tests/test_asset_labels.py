@@ -7,6 +7,7 @@ from PIL import Image
 
 from backend.tests.test_foundation import foundation, login, company, location
 from backend.tests.test_operations import seed
+from backend import providers
 
 
 def asset(client, data, **changes):
@@ -65,3 +66,28 @@ def test_label_rejects_inactive_parent_and_unit_outside_access(foundation):
     accept(client, person)
     login(client, 'restricted@example.com')
     assert client.post(data['base'] + '/assets/labels', json=body).status_code == 404
+
+
+def test_label_phone_comes_from_bound_whatsapp_session(foundation, monkeypatch):
+    client, storage = foundation
+    data = seed(client)
+    path = data['base'] + '/assets/labels/whatsapp'
+    assert client.get(path).json() == {'phone': ''}
+    cipher = client.app.state.whatsapp_intake.cipher
+    identifier = str(uuid4())
+    with storage.connect() as db:
+        db.execute('UPDATE configuration SET openwa_key=:key WHERE id=1', {'key': cipher.encrypt(b'private-test-key').decode()})
+        db.execute("INSERT INTO company_whatsapp(company_id,session_id,status) VALUES(:company,:session,'connected')", {'company': data['tenant']['id'], 'session': identifier})
+    def provider(url, headers):
+        assert url == providers.OPENWA_BASE + '/sessions/' + identifier
+        assert headers['X-API-Key'] == 'private-test-key'
+        return {'data': {'name': 'facilities-' + data['tenant']['id'], 'phone': '+55 (11) 98888-7777', 'secret': 'not-for-browser'}}
+    monkeypatch.setattr(providers, 'request_provider', provider)
+    response = client.get(path)
+    assert response.status_code == 200 and response.json() == {'phone': '5511988887777'}
+    monkeypatch.setattr(providers, 'request_provider', lambda *args: {'name': 'another-company', 'phone': '5511999999999'})
+    assert client.get(path).status_code == 502
+    login(client, 'requester@example.com')
+    assert client.get(path).status_code == 403
+    login(client, 'admin@example.com')
+    assert client.get(path).status_code == 403

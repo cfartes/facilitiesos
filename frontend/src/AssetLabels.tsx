@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Printer } from "lucide-react";
 import { api } from "./api";
@@ -50,9 +50,41 @@ export function AssetLabels({
 }) {
   const [selected, setSelected] = useState(() => assets.map((item) => item.id));
   const [phone, setPhone] = useState("");
+  const [phoneLoading, setPhoneLoading] = useState(true);
+  const [phoneNotice, setPhoneNotice] = useState("");
   const [items, setItems] = useState<Label[]>([]);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    setPhoneLoading(true);
+    setPhone("");
+    setPhoneNotice("");
+    void api<{ phone: string }>(
+      "/operations/companies/" + company + "/assets/labels/whatsapp",
+      "GET",
+      undefined,
+      controller.signal,
+    )
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setPhone(result.phone);
+        if (!result.phone)
+          setPhoneNotice(
+            "O número da sessão WhatsApp não está disponível. Informe o número de atendimento manualmente.",
+          );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setPhoneNotice(
+            "Não foi possível consultar o WhatsApp conectado. Informe o número de atendimento manualmente.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPhoneLoading(false);
+      });
+    return () => controller.abort();
+  }, [company]);
   async function generate(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -80,6 +112,11 @@ export function AssetLabels({
         wide
       >
         {error && <Notice error>{error}</Notice>}
+        {phoneNotice && (
+          <p className="form-help" role="status">
+            {phoneNotice}
+          </p>
+        )}
         <form onSubmit={generate}>
           <div className="field">
             <label htmlFor="label-phone">
@@ -96,13 +133,15 @@ export function AssetLabels({
               placeholder="5511999999999"
               required
               maxLength={25}
-              disabled={busy}
+              disabled={busy || phoneLoading}
               aria-describedby="label-phone-help"
             />
             <p className="form-help" id="label-phone-help">
-              Informe o número conectado no menu WhatsApp desta empresa. Confira
-              antes de imprimir: as etiquetas encaminharão as solicitações para
-              esse número.
+              {phoneLoading
+                ? "Consultando o número do WhatsApp conectado… "
+                : "O campo usa o número da sessão WhatsApp desta empresa, quando disponível. Você pode ajustá-lo. "}
+              Confira antes de imprimir: as etiquetas encaminharão as
+              solicitações para esse número.
             </p>
           </div>
           <fieldset className="label-selection" disabled={busy}>
@@ -148,7 +187,7 @@ export function AssetLabels({
           <div className="detail-buttons">
             <button
               className="button secondary"
-              disabled={busy || !selected.length}
+              disabled={busy || phoneLoading || !selected.length}
             >
               {busy ? "Gerando…" : "Gerar pré-visualização"}
             </button>

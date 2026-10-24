@@ -102,6 +102,8 @@ async function mockOperations(page: Page, requester = false, assets = [asset]) {
           unit_ids: [],
         },
       });
+    if (path.endsWith("/assets/labels/whatsapp"))
+      return route.fulfill({ json: { phone: "5511888888888" } });
     if (path.endsWith("/foundation/companies"))
       return route.fulfill({ json: [company] });
     if (path.endsWith("/metadata"))
@@ -189,6 +191,9 @@ for (const width of [1440, 390]) {
       .getByRole("button", { name: "Imprimir QR Codes", exact: true })
       .click();
     let dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("WhatsApp de atendimento")).toHaveValue(
+      "5511888888888",
+    );
     await expect(
       dialog.getByRole("checkbox", { name: "AC-003", exact: false }),
     ).toHaveCount(0);
@@ -241,6 +246,31 @@ for (const width of [1440, 390]) {
     ).toBeVisible();
   });
 }
+
+test("telefone das etiquetas permite preenchimento manual quando OpenWA falha", async ({
+  page,
+}) => {
+  await mockOperations(page);
+  await page.route("**/assets/labels/whatsapp", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { detail: "Temporariamente indisponível" },
+    }),
+  );
+  await page.goto("/app/ativos");
+  await page
+    .getByRole("button", { name: "Imprimir QR Codes", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("status")).toContainText(
+    "Informe o número de atendimento manualmente",
+  );
+  await expect(dialog.getByLabel("WhatsApp de atendimento")).toBeEnabled();
+  await dialog.getByLabel("WhatsApp de atendimento").fill("5511999999999");
+  await expect(dialog.getByLabel("WhatsApp de atendimento")).toHaveValue(
+    "5511999999999",
+  );
+});
 
 for (const width of [1440, 390]) {
   test(`complementos privados e triagem a ${width}px`, async ({ page }) => {

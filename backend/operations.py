@@ -136,6 +136,36 @@ OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_nam
 def register_operations(app, storage, actor, rate_limit, cipher):
     from backend.asset_labels import LabelInput, equipment, label
 
+    @app.get('/api/v1/operations/companies/{company_id}/assets/labels/whatsapp')
+    def label_whatsapp(company_id: UUID, user=Depends(actor)):
+        from backend import providers
+        from backend.whatsapp import body
+        import re
+        company = scope(user, company_id)
+        if not coordinates(user):
+            raise HTTPException(403, 'Esta ação exige supervisor ou administrador da empresa.')
+        rate_limit('asset-label-phone:' + digest(user['email']), 20, 60)
+        with storage.connect() as db:
+            session = db.execute('SELECT session_id FROM company_whatsapp WHERE company_id=:company', {'company': company}).fetchone()
+            config = db.execute('SELECT openwa_key FROM configuration WHERE id=1').fetchone()
+        if not session or not session['session_id'] or not config['openwa_key']:
+            return {'phone': ''}
+        try:
+            key = cipher.decrypt(config['openwa_key'].encode()).decode()
+        except InvalidToken:
+            raise HTTPException(503, 'A integração WhatsApp precisa ser revisada pelo administrador.') from None
+        info = body(providers.request_provider(providers.OPENWA_BASE + '/sessions/' + session['session_id'], {'X-API-Key': key}))
+        if info.get('name') != 'facilities-' + company:
+            raise HTTPException(502, 'O OpenWA não confirmou a sessão WhatsApp desta empresa.')
+        with storage.connect() as db:
+            fresh = db.execute('SELECT session_id FROM company_whatsapp WHERE company_id=:company', {'company': company}).fetchone()
+            current = db.execute('SELECT openwa_key FROM configuration WHERE id=1').fetchone()
+        if not fresh or fresh['session_id'] != session['session_id'] or current['openwa_key'] != config['openwa_key']:
+            raise HTTPException(409, 'A conexão mudou. Abra novamente a impressão das etiquetas.')
+        phone = info.get('phone')
+        digits = re.sub(r'\D', '', phone) if isinstance(phone, str) and re.fullmatch(r'[+0-9 ()-]+', phone) else ''
+        return {'phone': digits if re.fullmatch(r'[1-9][0-9]{7,14}', digits) else ''}
+
     @app.post('/api/v1/operations/companies/{company_id}/assets/labels')
     def asset_labels(company_id: UUID, data: LabelInput, user=Depends(actor)):
         company = scope(user, company_id)

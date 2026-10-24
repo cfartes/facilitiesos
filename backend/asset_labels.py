@@ -1,7 +1,8 @@
 """Etiquetas locais; o identificador do equipamento nunca concede acesso ao painel."""
 import base64
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, parse_qs
+import re
 from uuid import UUID
 
 import qrcode
@@ -12,6 +13,21 @@ class LabelInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     asset_ids: list[UUID] = Field(min_length=1, max_length=1000)
     phone: str = Field(pattern=r'^[1-9][0-9]{7,14}$')
+
+
+def qr_identifier(value):
+    text = value.strip()
+    if text.lower().startswith('https://'):
+        try:
+            parsed = urlsplit(text)
+            query = parse_qs(parsed.query)
+            if parsed.netloc.lower() != 'wa.me' or not re.fullmatch(r'/[1-9][0-9]{7,14}', parsed.path) or parsed.fragment or set(query) != {'text'} or len(query['text']) != 1:
+                return None
+            text = query['text'][0].strip()
+        except ValueError:
+            return None
+    match = re.fullmatch(r'(?:equipamento\s+)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', text, re.I)
+    return match[1].lower() if match else None
 
 
 def equipment(db, company, identifier):

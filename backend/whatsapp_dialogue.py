@@ -1,12 +1,11 @@
 """Diálogo determinístico; só a confirmação gera uma ocorrência."""
 import json
 import base64
-import re
 from uuid import uuid4
 
 from backend.foundation import now, record_audit
 from backend.security import digest
-from backend.asset_labels import equipment
+from backend.asset_labels import equipment, qr_identifier
 from backend.attachments import MAX_COMPANY_BYTES
 
 INTRO = 'Olá! Este canal registra solicitações de manutenção. Usaremos seu nome, telefone e relato para atender sua solicitação. Não envie senhas ou dados sensíveis. Em emergências, utilize o canal de emergência da unidade.\nQual é seu nome completo?'
@@ -94,11 +93,17 @@ def handle(db, cipher, company, phone_hash, chat, draft, text, category, photo=N
         return 'Solicitação cancelada. Nenhum novo protocolo foi criado. Digite MENU para começar novamente.'
     if command == 'menu' or draft.get('stage') == 'idle':
         draft.clear()
-    qr = re.fullmatch(r'equipamento\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', command)
-    if qr and draft.get('stage') in ('description', 'photos', 'confirm'):
-        return 'Já existe uma solicitação em andamento. Digite CANCELAR antes de iniciar outra por QR Code.' + HELP
+    qr = qr_identifier(text)
+    switch_prompt = 'Há uma solicitação em andamento.\n1 — Retomar a solicitação anterior\n2 — Descartar o rascunho anterior e iniciar pelo QR Code recebido' + HELP
+    if qr and draft.get('stage') in ('description', 'photos', 'confirm', 'switch_equipment'):
+        if not equipment(db, company, qr):
+            return 'Equipamento não encontrado ou indisponível nesta empresa. Seu rascunho anterior foi preservado.' + HELP
+        draft.setdefault('resume_stage', draft['stage'])
+        draft['stage'] = 'switch_equipment'
+        draft['pending_equipment'] = qr
+        return switch_prompt
     if qr:
-        draft['pending_equipment'] = qr[1]
+        draft['pending_equipment'] = qr
     if not draft or set(draft) == {'pending_equipment'}:
         if not contact:
             draft['stage'] = 'name'
@@ -106,6 +111,20 @@ def handle(db, cipher, company, phone_hash, chat, draft, text, category, photo=N
         draft['contact'] = contact['id']; draft['name'] = contact['name']
         return f'Olá, {contact["name"]}! Vamos registrar uma nova solicitação.\n' + begin(db, company, draft)
     stage = draft['stage']
+    if stage == 'switch_equipment':
+        if command in ('1', 'voltar'):
+            draft['stage'] = draft.pop('resume_stage')
+            draft.pop('pending_equipment', None)
+            return summary(draft) if draft['stage'] == 'confirm' else PHOTO_PROMPT if draft['stage'] == 'photos' else advance(db, company, draft, 'description')
+        if command == '2':
+            identifier = draft['pending_equipment']
+            draft.clear()
+            if not contact:
+                draft.update(stage='name', pending_equipment=identifier)
+                return INTRO
+            draft.update(contact=contact['id'], name=contact['name'])
+            return identify(db, company, draft, identifier)
+        return switch_prompt
     if qr:
         if stage == 'name':
             return INTRO

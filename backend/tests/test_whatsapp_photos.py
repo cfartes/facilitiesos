@@ -243,3 +243,51 @@ def test_media_log_tail_is_bounded_and_masks_urls_and_identifiers(tmp_path):
     assert len(errors) == 2 and 'NetworkError' in errors[0]
     assert 'secret' not in str(errors) and '5511999999999' not in str(errors)
     assert 'A' * 100 not in str(errors)
+
+
+def test_raw_qr_link_starts_without_menu_for_new_and_known_contact(foundation, monkeypatch):
+    from urllib.parse import urlencode
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    item = asset(client, data)
+    link = 'https://wa.me/5511999999999?' + urlencode({'text': 'EQUIPAMENTO ' + item['id']})
+    assert 'nome completo' in say(client, storage, data, link)
+    reply = say(client, storage, data, 'Contato Direto')
+    assert 'Equipamento identificado' in reply and 'Descreva o problema' in reply
+    assert 'Selecione a unidade' not in reply
+    say(client, storage, data, 'O equipamento está com vazamento de água.')
+    say(client, storage, data, '0')
+    assert 'Solicitação registrada' in say(client, storage, data, '1')
+    assert 'Descreva o problema' in say(client, storage, data, link)
+
+
+def test_qr_switch_preserves_draft_until_explicit_choice(foundation, monkeypatch):
+    from urllib.parse import urlencode
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    qr_start(client, storage, data)
+    other = asset(client, data, code='AC-002', name='Outro equipamento')
+    monkeypatch.setattr(providers, 'openwa_image', lambda *args: picture())
+    photo_event(client, data)
+    link = 'https://wa.me/5511999999999?' + urlencode({'text': 'EQUIPAMENTO ' + other['id']})
+    assert 'Retomar a solicitação anterior' in say(client, storage, data, link)
+    with storage.connect() as db:
+        draft = data['service'].decode(db.execute('SELECT draft FROM whatsapp_conversations').fetchone()['draft'])
+        assert len(draft['photos']) == 1 and draft['description']
+    assert 'Deseja enviar fotos' in say(client, storage, data, '1')
+    say(client, storage, data, link)
+    assert 'Outro equipamento' in say(client, storage, data, '2')
+    with storage.connect() as db:
+        draft = data['service'].decode(db.execute('SELECT draft FROM whatsapp_conversations').fetchone()['draft'])
+        assert draft['asset']['id'] == other['id'] and not draft.get('photos')
+        assert not db.execute('SELECT * FROM occurrences').fetchall()
+
+
+def test_qr_parser_accepts_only_generated_links_and_equipment_identifiers():
+    from backend.asset_labels import qr_identifier
+    identifier = str(uuid4())
+    assert qr_identifier('EQUIPAMENTO ' + identifier) == identifier
+    assert qr_identifier(identifier) == identifier
+    assert qr_identifier('https://wa.me/5511999999999?text=EQUIPAMENTO%20' + identifier) == identifier
+    assert qr_identifier('https://evil.example/?text=EQUIPAMENTO%20' + identifier) is None
+    assert qr_identifier('https://wa.me/5511999999999?text=' + identifier + '&text=' + identifier) is None
