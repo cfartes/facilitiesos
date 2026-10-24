@@ -62,7 +62,7 @@ const initialOrder = {
   closed_at: null,
 };
 
-async function mockOperations(page: Page, requester = false) {
+async function mockOperations(page: Page, requester = false, assets = [asset]) {
   let order = { ...initialOrder };
   const messages: object[] = [];
   const writes: { path: string; body: any }[] = [];
@@ -109,7 +109,7 @@ async function mockOperations(page: Page, requester = false) {
         json: {
           locations: [place],
           categories: [category],
-          assets: [asset],
+          assets,
           people: requester ? [] : [person],
           viewer_id: requester ? person.id : null,
           can_coordinate: !requester,
@@ -150,6 +150,96 @@ async function mockOperations(page: Page, requester = false) {
     return route.fulfill({ status: 404, json: {} });
   });
   return writes;
+}
+
+for (const width of [1440, 390]) {
+  test(`etiquetas em lote, seleção e impressão individual a ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 960 });
+    const second = {
+      ...asset,
+      id: "asset-2",
+      code: "AC-002",
+      name: "Ar da sala",
+    };
+    await mockOperations(page, false, [
+      asset,
+      second,
+      { ...asset, id: "asset-retired", code: "AC-003", status: "retired" },
+    ]);
+    let requested: any;
+    await page.route("**/assets/labels", async (route) => {
+      requested = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          items: [asset, second]
+            .filter((item) => requested.asset_ids.includes(item.id))
+            .map((item) => ({
+              ...item,
+              location: place.name,
+              qr_code:
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAFElEQVR4nGNkYPjPgA0wYRWlkwQAlocBCyQOisYAAAAASUVORK5CYII=",
+            })),
+        },
+      });
+    });
+    await page.goto("/app/ativos");
+    await page
+      .getByRole("button", { name: "Imprimir QR Codes", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("checkbox", { name: "AC-003", exact: false }),
+    ).toHaveCount(0);
+    await dialog
+      .getByRole("checkbox", { name: "AC-002", exact: false })
+      .uncheck();
+    await dialog
+      .getByLabel("WhatsApp de atendimento")
+      .fill("+55 (11) 99999-9999");
+    await dialog
+      .getByRole("button", { name: "Gerar pré-visualização" })
+      .click();
+    await expect(
+      dialog.getByRole("img", { name: "QR Code do equipamento AC-001" }),
+    ).toBeVisible();
+    expect(requested).toEqual({
+      asset_ids: [asset.id],
+      phone: "5511999999999",
+    });
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBeTruthy();
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator("body > .asset-label-print")).toBeVisible();
+    await expect(page.locator("#root")).toBeHidden();
+    await page.emulateMedia({ media: "screen" });
+    await dialog.getByRole("button", { name: "Fechar diálogo" }).click();
+    await page
+      .getByRole("button", { name: "Editar ativo " + second.name, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Imprimir QR Code deste equipamento" })
+      .click();
+    dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("checkbox", { name: "AC-002", exact: false }),
+    ).toBeChecked();
+    await expect(
+      dialog.getByRole("checkbox", { name: "AC-001", exact: false }),
+    ).toHaveCount(0);
+    await dialog.getByLabel("WhatsApp de atendimento").fill("5511999999999");
+    await dialog
+      .getByRole("button", { name: "Gerar pré-visualização" })
+      .click();
+    await expect(
+      dialog.getByRole("img", { name: "QR Code do equipamento AC-002" }),
+    ).toBeVisible();
+  });
 }
 
 for (const width of [1440, 390]) {

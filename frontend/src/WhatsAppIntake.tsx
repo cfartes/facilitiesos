@@ -58,13 +58,16 @@ export function WhatsAppIntake({ connected }: { connected: boolean }) {
       <div className="card-body">
         <p>
           O colaborador envia uma mensagem, informa o nome no primeiro contato e
-          escolhe unidade, local e equipamento. O sistema mostra um resumo e só
-          registra a ocorrência após a confirmação.
+          identifica o equipamento pela etiqueta QR ou escolhe unidade e local,
+          e pode enviar até três fotos. O sistema mostra um resumo e só registra
+          a ocorrência após a confirmação.
         </p>
         <p className="form-help">
-          Os contatos não recebem senha nem acesso ao painel. Esta etapa atende
-          mensagens de texto; fotos, QR de equipamentos e acompanhamento pelo
-          WhatsApp serão disponibilizados nas próximas etapas.
+          Os contatos não recebem senha nem acesso ao painel. Imprima as
+          etiquetas no cadastro de ativos. A leitura do QR é feita pela câmera
+          do celular; as fotos são enviadas pelo clipe ou câmera do WhatsApp,
+          quando solicitadas. Acompanhamento e atualizações pelo WhatsApp ficam
+          para a próxima etapa.
         </p>
         {error && <Notice error>{error}</Notice>}
         {!data ? (

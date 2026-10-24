@@ -37,9 +37,11 @@ Estados implementados: em triagem, atribuída, em execução, aguardando, resolv
 
 O Superadmin não acessa a operação em nenhum ambiente. Eventual suporte futuro exige perfil próprio e autorização pela empresa. Limites de listagem constam no README. Anexos de documentos/verificação de malware e filas para outras mensagens operacionais seguem pendentes antes de ampliar o piloto.
 
-Próximos incrementos: homologar a abertura textual na VPS/Traefik; etapa 2, QR dos equipamentos e fotos recebidas; etapa 3, acompanhamento/complementos/confirmação pelo WhatsApp. Checklist operacional e filtros por unidade/categoria/responsável permanecem no piloto web. Calendários/SLA vêm após essas pendências, antes de fornecedores/contratos/custos.
+Próximos incrementos: homologar na VPS as etiquetas QR dos equipamentos e fotos recebidas, implementadas nesta entrega; etapa 3, acompanhamento/complementos/confirmação pelo WhatsApp. O usuário mostrou o fluxo textual funcionando. Checklist operacional e filtros por unidade/categoria/responsável permanecem no piloto web. Calendários/SLA vêm após essas pendências, antes de fornecedores/contratos/custos.
 
 ## WhatsApp no piloto
+
+Etapa 2 implementada: impressão individual e em lote dos ativos, seleção conforme filtro/acesso e A4; número de atendimento informado explicitamente antes da impressão; QR gerado localmente com identificador aleatório do ativo e link para enviar a mensagem no WhatsApp. Bot reconhece o identificador somente na empresa receptora ou permite pular para seleção manual. Até três fotos JPEG/PNG, normalizadas e criptografadas no rascunho, com confirmação transacional, deduplicação e cota. Reutiliza tabelas, migrações e permissões dos anexos existentes; não há nova migração. Homologação real de mídia/impressão pendente. Procedimento no README.
 
 O administrador do cliente conecta pelo menu WhatsApp; a sessão usa nome exclusivo `facilities-{empresa}` e vínculo privado persistido. O usuário confirmou o QR de conexão funcionando. A API Key permanece global no Superadmin. Contratos de sessão e webhook foram localizados no RotaFY, sem copiar credenciais. QR de conexão não é persistido nem auditado; leituras são autenticadas e sem cache.
 

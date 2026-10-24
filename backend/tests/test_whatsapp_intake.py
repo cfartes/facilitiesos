@@ -71,11 +71,13 @@ def test_signed_dialogue_contact_without_login_and_work_order(foundation, monkey
     with storage.connect() as db:
         users_before = db.execute('SELECT count(*) AS n FROM users').fetchone()['n']
     assert 'nome completo' in say(client, storage, data, 'Olá')
-    assert 'Selecione a unidade' in say(client, storage, data, 'João Colaborador')
+    assert 'Pular QR Code' in say(client, storage, data, 'João Colaborador')
+    assert 'Selecione a unidade' in say(client, storage, data, '0')
     assert 'Selecione o local' in say(client, storage, data, '1')
     assert 'Selecione o equipamento' in say(client, storage, data, '1')
     assert 'Descreva o problema' in say(client, storage, data, '0')
-    assert 'Revise sua solicitação' in say(client, storage, data, 'O equipamento apresenta vazamento na recepção.')
+    assert 'Deseja enviar fotos' in say(client, storage, data, 'O equipamento apresenta vazamento na recepção.')
+    assert 'Revise sua solicitação' in say(client, storage, data, '0')
     with storage.connect() as db:
         assert db.execute('SELECT count(*) AS n FROM occurrences').fetchone()['n'] == 0
     response, raw, signature = message(client, data, '1')
@@ -120,6 +122,7 @@ def test_invalid_events_back_cancel_and_expired_conversation(foundation, monkeyp
     with storage.connect() as db:
         assert db.execute('SELECT * FROM whatsapp_events').fetchall() == []
     say(client, storage, data, 'oi'); say(client, storage, data, 'Maria Colaboradora')
+    say(client, storage, data, '0')
     say(client, storage, data, '1')
     assert 'Selecione a unidade' in say(client, storage, data, 'VOLTAR')
     say(client, storage, data, '1')
@@ -128,6 +131,7 @@ def test_invalid_events_back_cancel_and_expired_conversation(foundation, monkeyp
     say(client, storage, data, '0')
     assert '10 a 3.000' in say(client, storage, data, 'curto')
     say(client, storage, data, 'Ar-condicionado da sala externa sem refrigeração.')
+    say(client, storage, data, '0')
     say(client, storage, data, '1')
     with storage.connect() as db:
         assert 'Sala externa sem cadastro' in db.execute('SELECT description FROM occurrences').fetchone()['description']
@@ -220,6 +224,7 @@ def test_private_sender_requires_provider_phone_proof(foundation, monkeypatch):
     assert lookups == []
     assert 'nome completo' in say(client, storage, data, 'Olá', phone=sender)
     say(client, storage, data, 'Pessoa Identificada', phone=sender)
+    say(client, storage, data, '0')
     assert '%40lid/phone' in lookups[0]
     # O mesmo telefone em JID normal retoma o mesmo contato e o mesmo rascunho.
     assert 'Selecione o local' in say(client, storage, data, '1')

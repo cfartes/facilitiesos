@@ -1,0 +1,172 @@
+from io import BytesIO
+from uuid import uuid4
+
+from PIL import Image
+from fastapi import HTTPException
+
+from backend import providers
+from backend.tests.test_foundation import foundation, login, company, location
+from backend.tests.test_asset_labels import asset
+from backend.tests.test_whatsapp_intake import prepare, say, message
+
+
+def photo_event(client, data, **changes):
+    event = {'id': str(uuid4()), 'from': '5511999999999@c.us', 'fromMe': False, 'isGroup': False, 'body': '', 'type': 'image'} | changes
+    return message(client, data, '', changes={'data': event})
+
+
+def picture(color='red'):
+    output = BytesIO()
+    image = Image.new('RGB', (30, 20), color)
+    exif = image.getexif(); exif[270] = 'metadata-must-disappear'
+    image.save(output, 'JPEG', exif=exif)
+    return output.getvalue(), 'image/jpeg'
+
+
+def qr_start(client, storage, data):
+    item = asset(client, data)
+    assert 'nome completo' in say(client, storage, data, 'EQUIPAMENTO ' + item['id'])
+    reply = say(client, storage, data, 'Pessoa do WhatsApp')
+    assert 'Equipamento identificado: AC-001' in reply and 'Descreva o problema' in reply
+    assert 'Deseja enviar fotos' in say(client, storage, data, 'O ar-condicionado está pingando água na sala.')
+    return item
+
+
+def latest(storage, data):
+    with storage.connect() as db:
+        return data['service'].decode(db.execute('SELECT payload FROM whatsapp_outbox ORDER BY created_at DESC,id DESC LIMIT 1').fetchone()['payload'])['text']
+
+
+def test_qr_photos_confirm_private_attachments_and_replay(foundation, monkeypatch):
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    item = qr_start(client, storage, data)
+    calls = []
+    def download(key, session, chat, message_id):
+        calls.append((session, chat, message_id))
+        return picture()
+    monkeypatch.setattr(providers, 'openwa_image', download)
+    response, raw, signature = photo_event(client, data, body='CANCELAR')
+    assert response.status_code == 202 and 'Foto recebida (1/3)' in latest(storage, data)
+    assert len(calls) == 1
+    with storage.connect() as db:
+        assert not db.execute("SELECT id FROM whatsapp_outbox WHERE status='cancelled'").fetchall()
+    assert client.post('/api/v1/webhooks/openwa/' + data['tenant']['id'], content=raw, headers={'Origin': '', 'X-Openwa-Signature': signature}).status_code == 202
+    assert len(calls) == 1
+    assert photo_event(client, data)[0].status_code == 202
+    assert 'já foi recebida' in latest(storage, data)
+    with storage.connect() as db:
+        draft = db.execute('SELECT draft FROM whatsapp_conversations').fetchone()['draft']
+        assert 'metadata-must-disappear' not in draft and 'data' not in draft
+        assert db.execute('SELECT count(*) AS n FROM attachments').fetchone()['n'] == 0
+    assert 'Fotos: 1' in say(client, storage, data, '0')
+    assert 'Solicitação registrada! Protocolo:' in say(client, storage, data, '1')
+    with storage.connect() as db:
+        occurrence = db.execute('SELECT * FROM occurrences').fetchone()
+        assert occurrence['asset_id'] == item['id']
+        row = db.execute('SELECT * FROM attachments').fetchone()
+        assert row['uploader_id'] is None and row['uploader_name'] == 'Pessoa do WhatsApp'
+        decoded = data['service'].cipher.decrypt(row['ciphertext'].encode())
+        with Image.open(BytesIO(decoded)) as image:
+            assert not image.getexif()
+        assert data['service'].decode(db.execute('SELECT draft FROM whatsapp_conversations').fetchone()['draft']) == {'stage': 'idle'}
+    path = data['base'] + '/occurrences/' + occurrence['id'] + '/attachments'
+    assert len(client.get(path).json()['items']) == 1
+    assert client.get(path + '/' + row['id']).content == decoded
+    assert 'Equipamento identificado' in say(client, storage, data, 'EQUIPAMENTO ' + item['id'])
+    say(client, storage, data, 'CANCELAR')
+    login(client, 'requester@example.com')
+    assert client.get(path).status_code == 404
+    login(client, 'tech@example.com')
+    assert client.get(path + '/' + row['id']).status_code == 404
+
+
+def test_no_download_for_unauthorized_or_outside_photo_stage_and_cancel_race(foundation, monkeypatch):
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    calls = []
+    monkeypatch.setattr(providers, 'openwa_image', lambda *args: calls.append(args) or picture())
+    assert photo_event(client, data)[0].status_code == 202
+    assert calls == []
+    qr_start(client, storage, data)
+    event = {'id': str(uuid4()), 'from': '5511999999999@c.us', 'fromMe': False, 'isGroup': False, 'type': 'image'}
+    assert message(client, data, '', changes={'data': event}, signature=False)[0].status_code == 403
+    assert message(client, data, '', changes={'data': event, 'sessionId': str(uuid4())})[0].status_code == 202
+    assert calls == []
+    def cancel_during_download(*args):
+        say(client, storage, data, 'CANCELAR')
+        return picture()
+    monkeypatch.setattr(providers, 'openwa_image', cancel_during_download)
+    assert photo_event(client, data)[0].status_code == 202
+    with storage.connect() as db:
+        draft = data['service'].decode(db.execute('SELECT draft FROM whatsapp_conversations').fetchone()['draft'])
+        assert draft == {'stage': 'idle'}
+        assert not db.execute('SELECT * FROM attachments').fetchall()
+
+
+def test_photo_format_limit_removal_and_company_quota(foundation, monkeypatch):
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    qr_start(client, storage, data)
+    monkeypatch.setattr(providers, 'openwa_image', lambda *args: (b'not-an-image', 'image/jpeg'))
+    assert photo_event(client, data)[0].status_code == 202
+    assert 'Imagem inválida' in latest(storage, data)
+    monkeypatch.setattr(providers, 'openwa_image', lambda *args: (b'<svg/>', 'image/svg+xml'))
+    photo_event(client, data)
+    assert 'somente fotos JPEG ou PNG' in latest(storage, data)
+    for index, color in enumerate(('red', 'blue', 'green', 'yellow')):
+        monkeypatch.setattr(providers, 'openwa_image', lambda *args, color=color: picture(color))
+        assert photo_event(client, data)[0].status_code == 202
+        assert (f'({index + 1}/3)' if index < 3 else 'Limite de 3 fotos') in latest(storage, data)
+    assert 'Fotos descartadas' in say(client, storage, data, 'REMOVER FOTOS')
+    import backend.whatsapp_dialogue as dialogue
+    monkeypatch.setattr(dialogue, 'MAX_COMPANY_BYTES', 1)
+    photo_event(client, data)
+    assert 'cota de imagens' in latest(storage, data)
+    assert 'Fotos: 0' in say(client, storage, data, '0')
+    say(client, storage, data, '1')
+    with storage.connect() as db:
+        assert not db.execute('SELECT * FROM attachments').fetchall()
+
+
+def test_qr_cannot_select_another_company_or_retired_asset(foundation, monkeypatch):
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    say(client, storage, data, 'Oi'); say(client, storage, data, 'Pessoa Externa')
+    assert 'não encontrado' in say(client, storage, data, 'EQUIPAMENTO ' + str(uuid4()))
+    other = company(client, 'Empresa Beta', 'beta')
+    login(client, 'ownerbeta@example.com')
+    unit = location(client, other['id'])
+    foreign = asset(client, {'base': '/api/v1/operations/companies/' + other['id'], 'unit': unit})
+    login(client, 'owneralpha@example.com')
+    assert 'não encontrado' in say(client, storage, data, 'EQUIPAMENTO ' + foreign['id'])
+    item = asset(client, data)
+    with storage.connect() as db:
+        db.execute("UPDATE assets SET status='retired' WHERE id=:id", {'id': item['id']})
+    assert 'não encontrado' in say(client, storage, data, 'EQUIPAMENTO ' + item['id'])
+    assert 'Selecione a unidade' in say(client, storage, data, '0')
+
+
+def test_media_download_uses_fixed_provider_url_no_redirect_and_size_limit(monkeypatch):
+    from email.message import Message
+    from backend import attachments
+    calls = []
+    class Response(BytesIO):
+        headers = Message()
+        headers['Content-Type'] = 'image/jpeg'
+    class Opener:
+        def open(self, request, timeout):
+            calls.append(request.full_url)
+            assert request.get_header('X-api-key') == 'test-key'
+            assert timeout == 15
+            return Response(b'12345678901')
+    def opener(handler):
+        assert isinstance(handler, providers.NoRedirect)
+        return Opener()
+    monkeypatch.setattr(providers, 'build_opener', opener)
+    monkeypatch.setattr(attachments, 'MAX_BYTES', 10)
+    import pytest
+    with pytest.raises(HTTPException) as error:
+        providers.openwa_image('test-key', 'session', '5511999999999@c.us', '../../message?x')
+    assert error.value.status_code == 413
+    assert calls == [providers.OPENWA_BASE + '/sessions/session/messages/5511999999999%40c.us/..%2F..%2Fmessage%3Fx/media']

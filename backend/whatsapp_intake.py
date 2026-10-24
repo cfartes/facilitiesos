@@ -1,5 +1,6 @@
 """Webhook autenticado e fila persistente; nenhum envio ocorre na transação de entrada."""
 import asyncio
+import base64
 from datetime import datetime
 import hashlib
 import hmac
@@ -127,6 +128,7 @@ class WhatsAppIntake:
 
     def receive(self, company, raw, signature):
         resolved = self.resolve_private_sender(company, raw, signature)
+        prepared = self.prepare_photo(company, raw, signature, resolved)
         with self.storage.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             config = db.execute('''SELECT w.*,c.is_active,k.openwa_key FROM company_whatsapp w
@@ -189,17 +191,78 @@ class WhatsAppIntake:
             category = db.execute('SELECT id FROM service_categories WHERE company_id=:company AND name=:name AND is_active=1', {'company': company, 'name': CATEGORY}).fetchone()
             if not category:
                 reply = 'O recebimento de solicitações está temporariamente indisponível. Contate o administrador da empresa.'
+            elif data.get('type') == 'image':
+                if not prepared or prepared['session'] != config['session_id'] or prepared['key'] != config['openwa_key'] or not conversation or prepared['last_event_at'] != conversation['last_event_at'] or draft.get('stage') != 'photos':
+                    reply = 'Envie fotos somente quando o atendimento solicitar, depois da descrição do problema. Para usar a etiqueta QR, leia com a câmera do celular e envie a mensagem preenchida. Digite MENU para começar.'
+                elif prepared.get('error'):
+                    reply = prepared['error']
+                else:
+                    reply = handle(db, self.cipher, company, phone, chat, draft, '', category['id'], photo=prepared['photo'])
             elif not isinstance(text, str) or not text.strip() or len(text) > 4000 or data.get('type') not in (None, 'chat', 'text'):
-                reply = 'Nesta primeira etapa, envie mensagens em texto. A leitura de QR de equipamentos e fotos será disponibilizada na próxima etapa. Digite MENU para começar.'
+                reply = 'Envie a descrição em texto. Na etapa de fotos, use JPEG/PNG pelo clipe ou câmera do WhatsApp. Para identificar o equipamento, leia a etiqueta com a câmera do celular e envie a mensagem preenchida.'
             else:
                 reply = handle(db, self.cipher, company, phone, chat, draft, text.strip(), category['id'])
-            if isinstance(text, str) and text.strip().casefold() in ('menu','cancelar'):
+            if data.get('type') in (None, 'chat', 'text') and isinstance(text, str) and text.strip().casefold() in ('menu','cancelar'):
                 db.execute("UPDATE whatsapp_outbox SET status='cancelled',payload='' WHERE company_id=:company AND phone_hash=:phone AND status='queued' AND is_receipt=0", {'company': company, 'phone': phone})
             db.execute('''INSERT INTO whatsapp_conversations(company_id,phone_hash,draft,expires,last_event_at) VALUES(:company,:phone,:draft,:expires,:time)
                 ON CONFLICT(company_id,phone_hash) DO UPDATE SET draft=:draft,expires=:expires,last_event_at=:time''', {'company': company, 'phone': phone, 'draft': self.encode(draft), 'expires': current + 86400, 'time': occurred})
             db.execute('''INSERT INTO whatsapp_outbox(id,company_id,session_id,phone_hash,event_id,payload,credential_hash,is_receipt,status,created_at)
                 VALUES(:id,:company,:session,:phone,:event,:payload,:hash,:receipt,'queued',:time)''', {'id': str(uuid4()), 'company': company, 'session': config['session_id'], 'phone': phone, 'event': event_id,
                 'payload': self.encode({'chatId': recipient, 'text': reply}), 'hash': digest(config['openwa_key']), 'receipt': int(reply.startswith('Solicitação registrada! Protocolo:')), 'time': current})
+
+    def prepare_photo(self, company, raw, signature, resolved):
+        from backend.attachments import normalize_image
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            return None
+        data = event.get('data') if isinstance(event, dict) else None
+        if not isinstance(data, dict) or data.get('type') != 'image':
+            return None
+        sender, identifier = data.get('from'), data.get('id')
+        if not isinstance(sender, str) or not re.fullmatch(r'(?:[1-9][0-9]{7,14}@(c\.us|s\.whatsapp\.net)|[0-9]{5,30}@lid)', sender) or not isinstance(identifier, str) or not 1 <= len(identifier) <= 250:
+            return None
+        with self.storage.connect() as db:
+            config = db.execute('''SELECT w.*,c.is_active,k.openwa_key FROM company_whatsapp w
+                JOIN companies c ON c.id=w.company_id CROSS JOIN configuration k WHERE w.company_id=:company AND k.id=1''', {'company': company}).fetchone()
+            if not config or not config['webhook_secret'] or not re.fullmatch(r'sha256=[0-9a-f]{64}', signature):
+                raise HTTPException(403, 'Evento não autorizado.')
+            try:
+                expected = 'sha256=' + hmac.new(self.decode(config['webhook_secret']).encode(), raw, hashlib.sha256).hexdigest()
+            except InvalidToken:
+                raise HTTPException(403, 'Evento não autorizado.') from None
+            if not hmac.compare_digest(expected, signature):
+                raise HTTPException(403, 'Evento não autorizado.')
+            if event.get('event') != 'message.received' or event.get('sessionId') != config['session_id'] or not config['bot_enabled'] or not config['is_active'] or not config['openwa_key'] or data.get('fromMe') is not False or data.get('isGroup'):
+                return None
+            if resolved and (resolved['session'] != config['session_id'] or resolved['key'] != config['openwa_key'] or resolved['sender'] != sender):
+                return None
+            if sender.endswith('@lid') and not resolved:
+                return None
+            chat = (resolved['phone'] if resolved else sender.split('@')[0]) + '@c.us'
+            phone = hmac.new(self.lookup_key, (company + ':' + chat).encode(), hashlib.sha256).hexdigest()
+            conversation = db.execute('SELECT * FROM whatsapp_conversations WHERE company_id=:company AND phone_hash=:phone', {'company': company, 'phone': phone}).fetchone()
+            if not conversation or conversation['expires'] <= time.time() or self.decode(conversation['draft']).get('stage') != 'photos':
+                return None
+            if db.execute('SELECT id FROM whatsapp_events WHERE id=:id', {'id': digest(company + ':' + config['session_id'] + ':' + identifier)}).fetchone():
+                return None
+        try:
+            timestamp = datetime.fromisoformat(str(event.get('timestamp', '')).replace('Z', '+00:00'))
+            if timestamp.tzinfo is None or not max(config['enabled_since'] - 1, time.time() - 1800, conversation['last_event_at']) <= timestamp.timestamp() <= time.time() + 300:
+                return None
+        except ValueError:
+            return None
+        self.rate_limit('whatsapp-photo:' + phone, 10, 60)
+        prepared = {'session': config['session_id'], 'key': config['openwa_key'], 'last_event_at': conversation['last_event_at']}
+        try:
+            key = self.cipher.decrypt(config['openwa_key'].encode()).decode()
+            raw_image, content_type = providers.openwa_image(key, config['session_id'], sender, identifier)
+            filename = 'foto.png' if content_type == 'image/png' else 'foto.jpg'
+            _, image, fingerprint = normalize_image(raw_image, filename, content_type)
+            prepared['photo'] = {'data': base64.b64encode(image).decode(), 'sha256': fingerprint, 'byte_size': len(image), 'content_type': content_type}
+        except HTTPException as error:
+            prepared['error'] = str(error.detail) + '\nEnvie outra foto ou digite 0 para seguir.'
+        return prepared
 
     def resolve_private_sender(self, company, raw, signature):
         # A resolução é somente leitura e ocorre fora da transação de gravação.

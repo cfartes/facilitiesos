@@ -7,6 +7,7 @@ import {
   List,
   Pencil,
   Plus,
+  Printer,
   Search,
   ShieldCheck,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
   OccurrenceForm,
 } from "./OperationForms";
 import { OrderDetail } from "./OrderDetail";
+import { AssetLabels } from "./AssetLabels";
 import {
   assetStates,
   dateTime,
@@ -90,6 +92,7 @@ export function Operations({
     );
   const base = "/operations/companies/" + company,
     navBase = user.role === "superadmin" ? "/nexus" : "/app";
+  const [labelAssets, setLabelAssets] = useState<Asset[] | null>(null);
   const loadedCompany = useRef("");
   useEffect(() => {
     let cancelled = false;
@@ -401,6 +404,24 @@ export function Operations({
               )}
             </div>
           )}
+          {page === "assets" && meta.can_coordinate && (
+            <div className="detail-buttons">
+              <button
+                className="button secondary"
+                disabled={
+                  !visibleAssets.some((item) => item.status !== "retired")
+                }
+                onClick={() =>
+                  setLabelAssets(
+                    visibleAssets.filter((item) => item.status !== "retired"),
+                  )
+                }
+              >
+                <Printer size={17} />
+                Imprimir QR Codes
+              </button>
+            </div>
+          )}
           {page === "assets" &&
             (visibleAssets.length ? (
               <div
@@ -438,6 +459,18 @@ export function Operations({
                         <td>{assetStates[item.status]}</td>
                         <td>
                           <div className="row-actions">
+                            {meta.can_coordinate &&
+                              item.status !== "retired" && (
+                                <button
+                                  className="icon-button"
+                                  aria-label={
+                                    "Imprimir QR Code de " + item.name
+                                  }
+                                  onClick={() => setLabelAssets([item])}
+                                >
+                                  <Printer size={16} />
+                                </button>
+                              )}
                             {meta.can_coordinate && (
                               <button
                                 className="icon-button"
@@ -777,6 +810,17 @@ export function Operations({
           base={base}
           onClose={() => setCatalog(null)}
           onSaved={changed}
+          onPrint={(asset) => {
+            setCatalog(null);
+            setLabelAssets([asset]);
+          }}
+        />
+      )}
+      {labelAssets && (
+        <AssetLabels
+          company={company}
+          assets={labelAssets}
+          onClose={() => setLabelAssets(null)}
         />
       )}
       {meta && newReport && (

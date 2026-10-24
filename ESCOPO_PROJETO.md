@@ -69,7 +69,7 @@ Segurança, privacidade, acessibilidade e isolamento de dados são requisitos de
 | Ordens de serviço | Lista/quadro, filtros, atribuição, atividades, checklist, mensagens, anexos, orçamento e histórico | Parcial: fluxo de atendimento entregue; checklist, filtros completos e orçamento pendentes | Fase 1 para operação; fase 2 para orçamento, prazo e fornecedor |
 | Comunicação | Mensagens compartilhadas, notas internas e notificações | Parcial: comunicação no aplicativo e fila de convites entregues; demais mensagens externas pendentes | Fase 1 |
 | Evidências | Texto, fotos e documentos privados conforme necessidade e autorização | Parcial: texto e fotos JPEG/PNG entregues; documentos gerais pendentes | Fase 1 para fotos; documentos após definição e validação próprias |
-| WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: conexão, webhook assinado e abertura textual por contato sem login implementados; homologar na VPS, adicionar QR de equipamento/fotos e acompanhamento | Fase 1, condicionado à homologação do provedor |
+| WhatsApp / OpenWA | Relatos, identificação do solicitante, protocolos e atualizações | Parcial: conexão, webhook assinado, abertura sem login, etiquetas QR individuais/em lote e fotos opcionais implementados; homologar mídia/impressão e adicionar acompanhamento | Fase 1, condicionado à homologação do provedor |
 | E-mail / Resend | Convites e comunicações operacionais com tratamento de falhas | Parcial: configuração, teste, convites, recuperação/aviso de senha, fila e retentativas entregues; demais mensagens e confirmação de entrega pendentes | Fase 1 |
 | Equipes e fornecedores | Equipes próprias, organizações prestadoras, cobertura e acesso restrito | Pendente; usuários técnicos individuais já existem | Fase 2 |
 | Contratos de serviço | Vigência, escopo, anexos, cobertura, metas, limites e vencimentos | Pendente | Fase 2 |
@@ -174,7 +174,7 @@ Limites atuais de imagens: **200 MiB de conteúdo normalizado por empresa**, dez
 
 | Integração | Disponível hoje | Ainda não disponível |
 | --- | --- | --- |
-| OpenWA | Chave no Superadmin, sessão exclusiva e QR de conexão; cliente ativa webhook assinado; contato sem login, abertura textual com resumo/confirmação, protocolo, fila criptografada e contadores de respostas | Homologação dos eventos na VPS/Traefik, QR dos equipamentos/fotos e acompanhamento/atualizações pelo WhatsApp |
+| OpenWA | Chave no Superadmin, sessão exclusiva e QR de conexão; webhook assinado, contato sem login, etiquetas QR por ativo/em lote, fotos opcionais, resumo/confirmação, protocolo, fila criptografada e contadores | Homologação dos eventos de mídia na VPS, impressão/leitura física e acompanhamento/atualizações pelo WhatsApp |
 | Resend | Chave, remetente, teste explícito, habilitação separada para convites/recuperação, fila transacional, retentativas limitadas e aviso de senha alterada; resultado do último convite por usuário | Confirmação de entrega por webhook, outras mensagens operacionais e homologação real da conta |
 | ViaCEP | Consulta de endereço pelo backend com preenchimento manual alternativo | Não é integração operacional de atendimento |
 
@@ -204,7 +204,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | --- | --- | --- |
 | 1 | Homologação real de convites Resend | Fluxo, fila, limites e consulta de falhas implementados; falta validar domínio, conta, remetente, origem acessível e recebimento real |
 | 1 | Homologação da recuperação de senha | Fluxo para contas das empresas implementado e testado; validar recebimento real, disponibilidade e procedimento de suporte. Recuperação Nexus continua administrativa |
-| 1 | WhatsApp via OpenWA | Homologar na VPS o fluxo textual implementado; completar leitura de QR/fotos e acompanhamento, com identidade por empresa/telefone e protocolo após persistência |
+| 1 | WhatsApp via OpenWA | Homologar na VPS QR de equipamentos/fotos implementados e completar acompanhamento, com identidade por empresa/telefone e protocolo após persistência |
 | 1 | Confiabilidade de mensagens | Distinguir enfileirado, aceito pelo provedor, entregue quando comprovado e falho; evitar duplicação e permitir reprocessamento autorizado |
 | 1 | Privacidade e páginas legais do Facilities | Adaptar termos, política, cookies e compartilhamentos; disponibilizar canal e acompanhamento dos pedidos de titulares com procedimentos definidos |
 | 1 | Suporte Nexus em produção | Acesso autorizado pela empresa, temporário, limitado e auditado; definir necessidade de outros perfis Nexus e MFA antes de liberar acesso externo |
@@ -215,7 +215,7 @@ As pendências abaixo compõem a **recomendação de fechamento do piloto**, con
 | 2 | Paginação e capacidade do piloto | Paginar consultas que ultrapassem os limites atuais; dimensionar banco e imagens conforme volume real |
 | Condicionada | PDFs e outros documentos privados | Confirmar necessidade no piloto e implementar tipos permitidos, limites, validação, verificação de malware, autorização e retenção antes de aceitar arquivos |
 
-O recebimento textual pelo WhatsApp está implementado para homologação, sem exigir usuários previamente cadastrados. Contatos são identificados pela empresa/sessão e pelo telefone, e o nome é coletado no primeiro contato; isso não comprova vínculo empregatício. QR/fotos dos equipamentos e acompanhamento pelo canal são etapas posteriores. O fluxo externo ainda não deve ser marcado como homologado enquanto não for validado na VPS.
+O recebimento pelo WhatsApp não exige usuários previamente cadastrados. Contatos são identificados pela empresa/sessão e pelo telefone, e o nome é coletado no primeiro contato; isso não comprova vínculo empregatício. O usuário mostrou a abertura textual funcionando. Etiquetas QR individuais/em lote, identificação do equipamento pela mensagem preenchida e até três fotos opcionais estão implementadas e testadas localmente; ainda exigem homologação de mídia e impressão/leitura real. Acompanhamento pelo canal permanece para a próxima etapa.
 
 ### 6.1. Fluxo desejado para WhatsApp
 

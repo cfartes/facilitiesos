@@ -134,6 +134,22 @@ OCCURRENCE_SELECT = '''SELECT o.*,l.name AS location_name,c.name AS category_nam
 
 
 def register_operations(app, storage, actor, rate_limit, cipher):
+    from backend.asset_labels import LabelInput, equipment, label
+
+    @app.post('/api/v1/operations/companies/{company_id}/assets/labels')
+    def asset_labels(company_id: UUID, data: LabelInput, user=Depends(actor)):
+        company = scope(user, company_id)
+        write(user, coordinate=True)
+        rate_limit('asset-labels:' + digest(user['email']), 5, 60)
+        selections = []
+        with storage.scoped(user, company) as db:
+            for identifier in dict.fromkeys(data.asset_ids):
+                selected = equipment(db, company, identifier)
+                if not selected or not unit_allowed(user, selected['record']['unit_id']):
+                    raise HTTPException(404, 'Equipamento indisponível no seu acesso. Confira também os locais ativos.')
+                selections.append(selected)
+        return {'items': [label(selected, data.phone) for selected in selections]}
+
     def scope(user, company_id):
         company = str(company_id)
         if user['role'] == 'superadmin':

@@ -62,9 +62,11 @@ export function CatalogForm({
   base,
   onClose,
   onSaved,
+  onPrint,
 }: {
   kind: "asset" | "category";
   asset?: Asset;
+  onPrint?: (asset: Asset) => void;
   category?: Category;
   meta: Meta;
   base: string;
@@ -136,6 +138,15 @@ export function CatalogForm({
       busy={busy}
     >
       <Form onSubmit={submit} busy={busy} error={error} onClose={onClose}>
+        {asset && asset.status !== "retired" && onPrint && (
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => onPrint(asset)}
+          >
+            Imprimir QR Code deste equipamento
+          </button>
+        )}
         <div className="field">
           <label htmlFor="catalog-name">Nome</label>
           <input

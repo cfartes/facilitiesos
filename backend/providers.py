@@ -9,6 +9,22 @@ OPENWA_BASE = 'https://openwa.187-77-58-10.sslip.io/api'
 RESEND_BASE = 'https://api.resend.com'
 
 
+def openwa_image(key, session, chat, message):
+    from urllib.parse import quote
+    from backend.attachments import MAX_BYTES
+    # IDs autenticados do evento, nunca uma URL de download enviada pelo remetente.
+    url = OPENWA_BASE + '/sessions/' + quote(session, safe='') + '/messages/' + quote(chat, safe='') + '/' + quote(message, safe='') + '/media'
+    request = Request(url, headers={'X-API-Key': key, 'User-Agent': 'NexusFacilitiesOS/0.1'})
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=15) as response:
+            raw = response.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise HTTPException(413, 'A foto ultrapassa 5 MiB. Reduza o tamanho e envie novamente.')
+            return raw, response.headers.get_content_type()
+    except (HTTPError, URLError, OSError, ValueError):
+        raise HTTPException(502, 'Não foi possível obter a foto no OpenWA. Envie novamente ou digite 0 para seguir sem ela.') from None
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
