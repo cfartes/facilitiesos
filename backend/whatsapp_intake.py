@@ -211,7 +211,7 @@ class WhatsAppIntake:
                 'payload': self.encode({'chatId': recipient, 'text': reply}), 'hash': digest(config['openwa_key']), 'receipt': int(reply.startswith('Solicitação registrada! Protocolo:')), 'time': current})
 
     def prepare_photo(self, company, raw, signature, resolved):
-        from backend.attachments import normalize_image
+        from backend.attachments import normalize_image, MAX_BYTES
         try:
             event = json.loads(raw)
         except ValueError:
@@ -255,8 +255,19 @@ class WhatsAppIntake:
         self.rate_limit('whatsapp-photo:' + phone, 10, 60)
         prepared = {'session': config['session_id'], 'key': config['openwa_key'], 'last_event_at': conversation['last_event_at']}
         try:
-            key = self.cipher.decrypt(config['openwa_key'].encode()).decode()
-            raw_image, content_type = providers.openwa_image(key, config['session_id'], sender, identifier)
+            media = data.get('media')
+            inline = media.get('data') if isinstance(media, dict) and media.get('omitted') is not True else None
+            if inline is not None:
+                if not isinstance(inline, str) or len(inline) > ((MAX_BYTES + 2) // 3) * 4:
+                    raise HTTPException(413, 'A foto ultrapassa 5 MiB.')
+                try:
+                    raw_image = base64.b64decode(inline, validate=True)
+                except ValueError:
+                    raise HTTPException(422, 'O OpenWA enviou uma foto com codificação inválida. Envie uma nova foto.') from None
+                content_type = media.get('mimetype')
+            else:
+                key = self.cipher.decrypt(config['openwa_key'].encode()).decode()
+                raw_image, content_type = providers.openwa_image(key, config['session_id'], sender, identifier)
             filename = 'foto.png' if content_type == 'image/png' else 'foto.jpg'
             _, image, fingerprint = normalize_image(raw_image, filename, content_type)
             prepared['photo'] = {'data': base64.b64encode(image).decode(), 'sha256': fingerprint, 'byte_size': len(image), 'content_type': content_type}

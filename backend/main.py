@@ -124,6 +124,9 @@ def create_app(database=None, admin_email=None, admin_hash=None, encryption_key=
                 if request.method == 'POST' and request.url.path.startswith('/api/v1/operations/') and request.url.path.endswith('/attachments'):
                     from backend.attachments import MAX_BYTES
                     limit = MAX_BYTES
+                if request.method == 'POST' and request.url.path.startswith('/api/v1/webhooks/openwa/'):
+                    from backend.attachments import MAX_BYTES
+                    limit = ((MAX_BYTES + 2) // 3) * 4 + 65536
                 body = b''
                 async for chunk in request.stream():
                     body += chunk

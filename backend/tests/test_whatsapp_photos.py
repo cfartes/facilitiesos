@@ -1,4 +1,5 @@
 from io import BytesIO
+import base64
 from uuid import uuid4
 
 from PIL import Image
@@ -170,3 +171,41 @@ def test_media_download_uses_fixed_provider_url_no_redirect_and_size_limit(monke
         providers.openwa_image('test-key', 'session', '5511999999999@c.us', '../../message?x')
     assert error.value.status_code == 413
     assert calls == [providers.OPENWA_BASE + '/sessions/session/messages/5511999999999%40c.us/..%2F..%2Fmessage%3Fx/media']
+
+
+def test_signed_inline_photo_over_old_body_limit_needs_no_download(foundation, monkeypatch):
+    client, storage = foundation
+    data = prepare(client, storage, monkeypatch)
+    qr_start(client, storage, data)
+    output = BytesIO()
+    Image.effect_noise((320, 240), 90).convert('RGB').save(output, 'JPEG', quality=95)
+    raw = output.getvalue()
+    assert len(raw) > 24000
+    monkeypatch.setattr(providers, 'openwa_image', lambda *args: (_ for _ in ()).throw(AssertionError('Inline validado não precisa de download.')))
+    response, event, signature = photo_event(client, data, media={'mimetype': 'image/jpeg', 'data': base64.b64encode(raw).decode()})
+    assert response.status_code == 202, response.text
+    assert 'Foto recebida (1/3)' in latest(storage, data)
+    assert client.post('/api/v1/webhooks/openwa/' + data['tenant']['id'], content=event, headers={'Origin': '', 'X-Openwa-Signature': 'invalid'}).status_code == 403
+    assert photo_event(client, data, media={'mimetype': 'image/jpeg', 'data': 'https://example.com/photo.jpg'})[0].status_code == 202
+    assert 'codificação inválida' in latest(storage, data)
+
+
+def test_missing_stored_media_is_reported_as_provider_configuration(monkeypatch):
+    from urllib.error import HTTPError
+    import pytest
+    class Opener:
+        def open(self, request, timeout):
+            raise HTTPError(request.full_url, 404, 'Not found', {}, BytesIO(b'{"message":"No media stored for this message"}'))
+    monkeypatch.setattr(providers, 'build_opener', lambda *args: Opener())
+    with pytest.raises(HTTPException) as error:
+        providers.openwa_image('test', 'session', '5511999999999@c.us', 'message')
+    assert 'não disponibilizou o arquivo' in error.value.detail
+    assert 'download de mídia' in error.value.detail
+
+
+def test_media_diagnostic_does_not_expose_other_environment_settings():
+    from scripts.check_openwa_media import media_settings
+    result = media_settings(['MEDIA_DOWNLOAD_ENABLED=false', 'MEDIA_DOWNLOAD_MAX_BYTES=1024', 'API_KEY=secret-not-for-output', 'DATABASE_URL=private'])
+    assert result['MEDIA_DOWNLOAD_ENABLED'] == 'false'
+    assert result['MEDIA_DOWNLOAD_MAX_BYTES'] == '1024'
+    assert 'secret-not-for-output' not in str(result) and 'DATABASE_URL' not in result

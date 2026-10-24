@@ -21,7 +21,13 @@ def openwa_image(key, session, chat, message):
             if len(raw) > MAX_BYTES:
                 raise HTTPException(413, 'A foto ultrapassa 5 MiB. Reduza o tamanho e envie novamente.')
             return raw, response.headers.get_content_type()
-    except (HTTPError, URLError, OSError, ValueError):
+    except HTTPError as error:
+        if error.code == 404:
+            raise HTTPException(502, 'O OpenWA recebeu a mensagem, mas não disponibilizou o arquivo da foto. O administrador precisa conferir o download de mídia e os logs do OpenWA. Depois, envie uma nova foto.') from None
+        if error.code in (401, 403):
+            raise HTTPException(502, 'O OpenWA recusou o acesso ao arquivo da foto. Solicite ao administrador a revisão das permissões da integração.') from None
+        raise HTTPException(502, 'O OpenWA não concluiu o download da foto. Tente novamente mais tarde ou digite 0 para seguir sem ela.') from None
+    except (URLError, OSError, ValueError):
         raise HTTPException(502, 'Não foi possível obter a foto no OpenWA. Envie novamente ou digite 0 para seguir sem ela.') from None
 
 
