@@ -228,3 +228,18 @@ def test_media_diagnostic_reports_logging_and_compose_without_secrets(monkeypatc
     assert 'Driver de logs: none' in output
     assert '/opt/openwa/compose.yaml' in output
     assert 'private-value' not in output and 'API_KEY' not in output
+
+
+def test_media_log_tail_is_bounded_and_masks_urls_and_identifiers(tmp_path):
+    import json
+    from scripts.check_openwa_media import media_errors
+    path = tmp_path / 'container-json.log'
+    path.write_text('x' * 300000 + '\n' + '\n'.join(json.dumps({'log': line}) for line in [
+        'ordinary message without media',
+        'Inbound media download failed; error: NetworkError https://example.com/private?token=secret 5511999999999',
+        'media error ' + 'A' * 100,
+    ]))
+    errors = media_errors(path)
+    assert len(errors) == 2 and 'NetworkError' in errors[0]
+    assert 'secret' not in str(errors) and '5511999999999' not in str(errors)
+    assert 'A' * 100 not in str(errors)
