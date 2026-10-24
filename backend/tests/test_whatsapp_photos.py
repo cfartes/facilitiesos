@@ -209,3 +209,22 @@ def test_media_diagnostic_does_not_expose_other_environment_settings():
     assert result['MEDIA_DOWNLOAD_ENABLED'] == 'false'
     assert result['MEDIA_DOWNLOAD_MAX_BYTES'] == '1024'
     assert 'secret-not-for-output' not in str(result) and 'DATABASE_URL' not in result
+
+
+def test_media_diagnostic_reports_logging_and_compose_without_secrets(monkeypatch, capsys):
+    import json
+    from scripts import check_openwa_media as check
+    def command(args, **kwargs):
+        assert kwargs['timeout'] == 10
+        if args[1] == 'ps':
+            return 'openwa-api\n'
+        return json.dumps([{'Name': '/openwa-api', 'Config': {'Image': 'rmyndharis/openwa:latest',
+            'Env': ['API_KEY=private-value'], 'Labels': {'com.docker.compose.project.config_files': '/opt/openwa/compose.yaml',
+                'com.docker.compose.service': 'api'}}, 'HostConfig': {'LogConfig': {'Type': 'none'}}}])
+    monkeypatch.setattr(check.subprocess, 'check_output', command)
+    monkeypatch.setattr(check.sys, 'argv', ['check_openwa_media.py', 'openwa-api'])
+    check.main()
+    output = capsys.readouterr().out
+    assert 'Driver de logs: none' in output
+    assert '/opt/openwa/compose.yaml' in output
+    assert 'private-value' not in output and 'API_KEY' not in output
