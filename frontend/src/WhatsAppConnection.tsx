@@ -118,7 +118,7 @@ export function WhatsAppConnection() {
               alt="QR Code para conectar o WhatsApp da empresa"
               width={280}
               height={280}
-              style={{ maxWidth: "100%", height: "auto" }}
+              className="whatsapp-connection-qr"
             />
           )}
           <div className="detail-buttons">

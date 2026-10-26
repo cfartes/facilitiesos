@@ -468,3 +468,11 @@
     flex-direction: column;
   }
 }
+@media (pointer: coarse) {
+  .field input,
+  .field select,
+  .field textarea,
+  .operation-toolbar select {
+    font-size: 16px;
+  }
+}

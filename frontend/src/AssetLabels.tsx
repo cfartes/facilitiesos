@@ -146,7 +146,8 @@ export function AssetLabels({
           </div>
           <fieldset className="label-selection" disabled={busy}>
             <legend>
-              Equipamentos do filtro atual ({selected.length} selecionados)
+              Equipamentos do filtro atual ({selected.length}{" "}
+              {selected.length === 1 ? "selecionado" : "selecionados"})
             </legend>
             <label className="checkbox">
               <input
@@ -198,7 +199,8 @@ export function AssetLabels({
                 onClick={() => window.print()}
               >
                 <Printer size={17} />
-                Imprimir {items.length} etiqueta(s)
+                Imprimir {items.length}{" "}
+                {items.length === 1 ? "etiqueta" : "etiquetas"}
               </button>
             )}
           </div>

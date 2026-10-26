@@ -1061,8 +1061,18 @@ export function App() {
             <strong>{label}</strong>
           </div>
           <div className="user-menu">
-            <span className="avatar">{user.name?.slice(0, 1) ?? "N"}</span>
-            <span className="user-email">{user.email}</span>
+            <span className="avatar">
+              {
+                Array.from(
+                  new Intl.Segmenter("pt-BR", {
+                    granularity: "grapheme",
+                  }).segment(user.name?.trim() || "N"),
+                )[0].segment
+              }
+            </span>
+            <span className="user-email" title={user.email}>
+              {user.email}
+            </span>
             <button
               className="icon-button"
               aria-label="Sair da conta"

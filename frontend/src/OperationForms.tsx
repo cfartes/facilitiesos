@@ -141,7 +141,7 @@ export function CatalogForm({
         {asset && asset.status !== "retired" && onPrint && (
           <button
             type="button"
-            className="button secondary"
+            className="button secondary catalog-print-button"
             onClick={() => onPrint(asset)}
           >
             Imprimir QR Code deste equipamento

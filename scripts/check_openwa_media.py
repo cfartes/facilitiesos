@@ -27,11 +27,12 @@ def media_errors(path):
             continue
         if not re.search(r'media|download', line, re.I) or not re.search(r'fail|error|timeout|timed out|exceed|omitted', line, re.I):
             continue
-        line = re.sub(r'\x1b\[[0-9;]*m', '', line)[:1200]
+        line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+        line = re.sub(r'''(?i)(\b(?:x-api-key|api[_-]?key|password|passwd|secret|token|authorization|credential)\b["']?\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;}]+)''', r'\1[protegido]', line)
         line = re.sub(r'https?://\S+', '[url omitida]', line)
         line = re.sub(r'[A-Za-z0-9+/=_-]{40,}', '[identificador omitido]', line)
         line = re.sub(r'[0-9]{7,}', '[numero omitido]', line)
-        errors.append(line)
+        errors.append(line[:1200])
     return errors[-8:]
 
 

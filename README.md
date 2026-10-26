@@ -4,6 +4,8 @@ Nexus Facilities OS para validação do piloto, seguindo a identidade visual do 
 
 Consulte o [escopo completo, entregas, pendências da fase 1 e próximas features](ESCOPO_PROJETO.md).
 
+Veja também a [revisão de interface e segurança de 26/10/2026](REVISAO_UI_SEGURANCA.md), com melhorias aplicadas, testes de dados extremos e limites da validação.
+
 ## Recursos disponíveis
 
 - Superadmin: somente cadastro/edição/suspensão de empresas, integrações e auditoria. Operação, estrutura física e gestão de usuários pertencem ao administrador do cliente; a API aplica a mesma separação, inclusive em desenvolvimento.

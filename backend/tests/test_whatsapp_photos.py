@@ -245,6 +245,16 @@ def test_media_log_tail_is_bounded_and_masks_urls_and_identifiers(tmp_path):
     assert 'A' * 100 not in str(errors)
 
 
+def test_media_log_does_not_expose_short_credentials_in_error_text(tmp_path):
+    import json
+    from scripts.check_openwa_media import media_errors
+    path = tmp_path / 'container-json.log'
+    path.write_text(json.dumps({'log': 'media download failed: X-API-Key=abc123 password="short-pass" Authorization: Bearer sensitive-value token=short-token'}))
+    result = str(media_errors(path))
+    for secret in ('abc123', 'short-pass', 'sensitive-value', 'short-token'):
+        assert secret not in result
+
+
 def test_raw_qr_link_starts_without_menu_for_new_and_known_contact(foundation, monkeypatch):
     from urllib.parse import urlencode
     client, storage = foundation

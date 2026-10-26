@@ -48,9 +48,8 @@ export function WhatsAppIntake({ connected }: { connected: boolean }) {
   }
   return (
     <section
-      className="card"
+      className="card whatsapp-intake"
       aria-labelledby="whatsapp-intake-title"
-      style={{ marginTop: 24 }}
     >
       <header className="card-header">
         <h2 id="whatsapp-intake-title">Abertura de solicitações</h2>

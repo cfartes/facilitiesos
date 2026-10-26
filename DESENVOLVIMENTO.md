@@ -6,6 +6,8 @@ O [escopo consolidado do projeto](ESCOPO_PROJETO.md) detalha a fase 1, suas pend
 
 ## Entregue — integrações e fundação
 
+- Revisão visual/mobile e de segurança com as skills instaladas: cabeçalho estável com e-mails longos, inicial Unicode correta, controles de toque, modal com cabeçalho acessível e impressão com pluralização. Harness de dados extremos somente nos testes. Corrigida ocultação de credenciais curtas em texto de erro no diagnóstico. Resultado: 175 testes backend/instalador e 52 de interface passaram; dependências e histórico sem alertas conhecidos nas consultas realizadas. Limites e evidências em `REVISAO_UI_SEGURANCA.md`; aparelho real/VPS não foram testados nesta revisão.
+
 - Instalador Linux para VPS com Traefik existente, stack Docker própria, imagens de API/frontend, PostgreSQL privado e migração separada. Gera segredos, pede a senha do Superadmin no terminal, preserva credenciais nas reexecuções e faz backup antes das atualizações. Guia em `infra/INSTALACAO_VPS.md`. Verificado em containers locais; execução na VPS e validação pública permanecem pendentes.
 
 - Tela de integrações OpenWA/Resend, segredos criptografados, substituição/remoção, testes explícitos e auditoria.

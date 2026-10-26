@@ -245,6 +245,7 @@ td code {
   width: min(570px, calc(100% - 32px));
   max-height: calc(100dvh - 40px);
   box-shadow: 0 20px 80px #06132033;
+  overscroll-behavior: contain;
 }
 .modal::backdrop {
   background: #06132099;
@@ -256,12 +257,19 @@ td code {
   gap: 15px;
   padding: 17px 23px;
   border-bottom: 1px solid #e5edf1;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 2;
 }
 .modal h2 {
   font-size: 18px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .modal-body {
   padding: 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 .modal-actions {
   display: flex;
